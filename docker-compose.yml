@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_app
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - MONGODB_URL=mongodb://db:27017
+      - MONGODB_DB_NAME=fastapi_production
+      - SECRET_KEY=supersecretkey-change-this-in-production-use-openssl-rand-hex-32
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: always
+
+  db:
+    image: mongo:7.0
+    container_name: mongodb_db
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+volumes:
+  mongo_data:
