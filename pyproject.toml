@@ -9,6 +9,10 @@ description = "Production Ready Python + FastAPI Backend Base"
 readme = "README.md"
 requires-python = ">=3.10"
 
+[tool.setuptools]
+packages = ["app", "api"]
+
+
 [tool.pytest.ini_options]
 minversion = "8.0"
 addopts = "-ra -q --asyncio-mode=auto"
