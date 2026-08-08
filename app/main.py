@@ -2,9 +2,21 @@ from contextlib import asynccontextmanager
 import logging
 import os
 from pathlib import Path
+import base64
 from fastapi import FastAPI, Request
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+
+
+# Simple inline favicon (32x32 PNG) – base64 encoded
+_favicon_data = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAABF0lEQVR4nO3XQQrCMBCF4Z+R7EUEUkwTjC6BJCBJigEQrLi3pprtgU+PxsTKkYnx5nvvkGe7yAVxKMZ+eL/7r4R+QH+QQgAkJcCgMVCLF8jHZ6jvceoqM0/3pGAN7iB8C/As6tMKZRnuS7Z+qeVHJIBp7haQ8Vw/+om9e0giVIg9gVbKfAAEkhF8B0dSi2ELToV2PhKOHcl7Kd+mvfce3I+wc6JCNEABAI4AAQQAACCAAABKAiDchG9gAAAAASUVORK5CYII="
+)
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(content=_favicon_data, media_type="image/png")
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import close_db, ensure_db_initialized, init_db
