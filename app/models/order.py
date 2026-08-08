@@ -26,6 +26,7 @@ class OrderStatus(str, Enum):
 class PaymentMethod(str, Enum):
     UPI = "upi"
     CASH = "cash"
+    RAZORPAY = "razorpay"
 
 
 class PaymentStatus(str, Enum):
@@ -33,6 +34,7 @@ class PaymentStatus(str, Enum):
     PAID = "paid"
     CASH_ON_DELIVERY = "cash_on_delivery"
     FAILED = "failed"
+
 
 
 class OrderItem(BaseModel):
@@ -104,6 +106,10 @@ class Order(Document):
     payment_method: PaymentMethod = PaymentMethod.CASH
     payment_status: PaymentStatus = PaymentStatus.PENDING
     upi_transaction_id: Optional[str] = None
+    razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+
 
     # Delivery information
     delivery_address: Optional[str] = None

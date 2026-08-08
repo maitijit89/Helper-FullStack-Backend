@@ -1,86 +1,189 @@
-# FastAPI Production Base (Multi-Role, MongoDB, Delivery Partner Lifecycle & OTP Auth Edition)
+# Helper FullStack Backend - Production Hyper-Local Platform API
 
-A modular, production-ready **Python + FastAPI** backend project base supporting **Users (Customers)**, **Partners (Delivery Drivers)**, and **Admins** powered by **MongoDB**, **Motor**, **Beanie ODM**, **Pydantic v2**, **Passwordless OTP Email Verification & Login**, **Designated Admin OTP Auth**, **Delivery Partner Lifecycle Management**, **User Logout**, and **Account Deletion**.
-
----
-
-## 🚀 Key Features
-
-- **Delivery Partner Lifecycle & Management**:
-  - `POST /api/v1/auth/signup/partner`: Application submission requiring **Name**, **DOB**, **Email**, **Phone**, **College**, **Current Address**, **Permanent Address**, and preferred **Delivery Mode** (`cycle` or `walking`).
-  - **Weekly Application Rate Limit**: Enforces a strict 7-day cooldown between applications for the same partner email/phone.
-  - **Admin Approval & Credentials Generation**: Admin approval automatically generates a unique **Partner ID** (e.g. `PRT-892134`) and an initial login password.
-  - **Admin Rejection Notice**: Admin rejection sets verification status to `REJECTED` with a custom rejection reason ("You are rejected. Try again later after 7 days.").
-  - **Partner Login**: `POST /api/v1/auth/partner/login` allowing delivery partners to authenticate via `Partner ID` or `Email` and `Password`.
-  - **Partner Password Change**: `PUT /api/v1/partner/change-password` allowing delivery partners to set a new password by providing `previous_password` and `new_password`.
-- **Designated Admin OTP Authentication**:
-  - `POST /api/v1/auth/admin/request-otp`: Requests a 6-digit OTP code restricted exclusively to the designated email: `helpingservicesteam@gmail.com`.
-  - `POST /api/v1/auth/admin/verify-otp`: Verifies the Admin OTP and issues Admin JWT tokens (`role: UserRole.ADMIN`, `is_superuser: True`) for administrator access.
-- **Extended Customer Registration & Passwordless OTP**:
-  - `POST /api/v1/auth/signup/user`: Customer registration requiring Name, DOB, Gender, Email, Phone, College, and Address. Generates email verification OTP.
-  - `POST /api/v1/auth/verify-otp`: Verifies registration OTP and returns JWT tokens.
-  - `POST /api/v1/auth/login/request-otp` & `POST /api/v1/auth/login/verify-otp`: Passwordless OTP login.
-  - `POST /api/v1/auth/logout`: Log out current session.
-  - `DELETE /api/v1/users/me`: Delete user account permanently.
-- **Role-Based Access Control (RBAC)**: Security dependency guards enforcing role restrictions (`get_current_user`, `get_current_partner`, `get_current_admin`).
-- **MongoDB + Beanie ODM**: Asynchronous Document Object Mapping (ODM) for `User` and `OTP` models powered by `Motor`.
-- **Automated Test Suite**: 100% passing unit tests using `pytest`, `pytest-asyncio`, `httpx`, and `mongomock_motor`.
-- **Containerization**: Multi-stage `Dockerfile` and `docker-compose.yml` with MongoDB 7.0 service.
+A production-ready, asynchronous **Python 3.13 + FastAPI** backend powering a multi-service hyper-local platform. Features **Quick Commerce**, **Automated Print/Xerox PDF Page Counter & Pricing Engine**, **Porter Parcel Delivery (< 5 kg)**, **Handwritten Assignment Writer Service**, **GPS-Based Partner Dispatching (1 km Ringing Algorithm)**, **Partner Wallet & 48-Hour Holding Period Earnings Engine**, **Razorpay Payment Gateway (HMAC SHA256 Verification & Webhooks)**, **Google Gemini AI Assistant**, **MongoDB Atlas (Beanie ODM)**, **Upstash Redis**, and **Multi-Role OAuth2 JWT & Passwordless Email OTP Authentication**.
 
 ---
 
-## 📁 Directory Architecture
+## 🚀 Key Platform Capabilities
+
+### 🛒 1. Quick Commerce Engine
+- **Product Catalog**: Categorized inventory (snacks, cold drinks, cakes, stationery).
+- **Cart Management**: Add, update, and manage items in shopping carts per customer.
+- **Order Placement**: Fast order creation with delivery address, phone, and total cost breakdown.
+
+### 📄 2. Xerox Print & Binding Service
+- **Automated PDF Page Counting**: Uses `pypdf` via `PageCounterService` to parse uploaded PDF documents and calculate exact page counts (`num_pages`).
+- **Customizable Print Specifications**: Supports color mode (`black_and_white` vs `color`), paper size (`A4`, `A3`), single/double-sided printing, and binding options (`spiral`, `channel_file`).
+- **Physical Hardcopy Pickup**: Dedicated workflow allowing delivery partners to physically collect hardcopy notes/documents from customers for Xerox scanning.
+- **Secure File Streaming & Download**: Exclusive endpoint for assigned delivery partners, customers, or admins to stream/download print documents.
+
+### 📦 3. Porter Parcel Courier (< 5 kg)
+- Hyper-local parcel pickup and drop-off service restricted to parcels under 5.0 kg.
+- Address & sender/receiver contact validation with optional GPS coordinate attachments.
+
+### ✍️ 4. Handwritten Assignment Writer Service
+- On-demand assignment writing service for students.
+- Specifies page count, paper type (`a4_ruled`, `a4_unruled`, `practical_sheet`), binding type, and ink color (`blue`, `black`, `multicolor`).
+
+### 🛵 5. Delivery Partner Ecosystem & GPS Ringing Dispatch
+- **Partner Onboarding Lifecycle**: Partner application submission with 7-day cooldown rate limiting per email/phone. Admin approval generates unique Partner IDs (e.g., `PRT-892134`).
+- **GPS Device Verification**: Enforces device GPS ON (`is_gps_enabled=True`) for partner operations.
+- **1 km Ringing Dispatch Algorithm**: Automatically identifies and notifies active delivery partners within a 1 km Haversine radius of the order pickup location (`notified_partner_ids`).
+- **Atomic Acceptance**: Prevents race conditions when multiple partners attempt to accept the same order simultaneously.
+- **Live Order Location Tracking**: Real-time tracking of both Delivery Partner and Customer GPS coordinates with dynamic Haversine distance computation.
+
+### 💳 6. Razorpay Payment Gateway Integration
+- **Razorpay Order Creation (`POST /api/v1/payments/razorpay/create-order`)**: Generates Razorpay Order (`order_...`) matching system order totals (`amount_in_paise`).
+- **HMAC SHA256 Signature Verification (`POST /api/v1/payments/razorpay/verify`)**: Validates `razorpay_signature` using `RAZORPAY_KEY_SECRET` before marking payment status as `PAID`.
+- **Asynchronous Webhooks (`POST /api/v1/payments/razorpay/webhook`)**: Handles `payment.captured` and `order.paid` webhook events idempotently.
+
+### 💰 7. Partner Wallet & Payout System
+- **Earnings Crediting**: Delivery earnings automatically credit to the partner's wallet upon order delivery.
+- **48-Hour Holding Period**: Prevents immediate fraudulent withdrawals by enforcing a 48-hour maturity rule before earnings transition to withdrawable balance.
+- **Manual Admin Payout Approvals**: Partners request withdrawals (UPI ID or Bank Details), which admins review and approve/reject with automated wallet balance deduction.
+
+### 🤖 8. AI Support Assistant & Customer Service
+- **Google Gemini AI Integration (`gemini-1.5-flash`)**: Customer AI chatbot for instant support inquiries and automated ticket summarization.
+- **Support Ticket Engine**: Customer issue reporting, priority assignment, and ticket resolution workflows.
+
+---
+
+## 🛠️ Technology Stack
+
+| Layer | Technology | Purpose |
+| :--- | :--- | :--- |
+| **Framework** | Python 3.13 / FastAPI 0.111+ | Asynchronous Web Framework |
+| **ASGI Server** | Uvicorn | Asynchronous ASGI Web Server |
+| **Database** | MongoDB Atlas | Primary Cloud NoSQL Document Database |
+| **ODM Layer** | Beanie ODM / Motor | Async Object Document Mapper built on Pydantic v2 |
+| **Caching & Limits**| Upstash Redis | Caching, rate limiting, and ephemeral lock storage |
+| **File Storage** | AWS S3 / Boto3 | Cloud storage for Xerox PDFs, documents, & KYC |
+| **Payments** | Razorpay Python SDK | Razorpay Orders, HMAC SHA256 verification, & Webhooks |
+| **PDF Inspection** | PyPDF | Automated PDF document page counting |
+| **Geolocation** | Haversine + Mappls API | Distance calculation & geocoding |
+| **AI Integration** | Google Gemini AI (`gemini-1.5-flash`) | AI customer support assistant |
+| **Email Service** | Google SMTP | Passwordless OTPs & notification emails |
+| **Testing** | Pytest, pytest-asyncio, Mongomock Motor | Comprehensive automated async API testing |
+
+---
+
+## 📁 Directory Structure
 
 ```
-app/
-├── api/
-│   ├── deps.py                    # Shared API dependencies & RBAC guards
-│   └── v1/
-│       ├── router.py              # Aggregated V1 API Router
-│       └── endpoints/
-│           ├── auth.py            # /signup/user, /signup/partner, /partner/login, /admin/request-otp, /admin/verify-otp, /verify-otp, /login/request-otp, /login/verify-otp, /logout
-│           ├── users.py           # Customer profile management (GET /me, PUT /me, DELETE /me)
-│           ├── partner.py          # Delivery Partner portal (GET /me, PUT /me, PUT /change-password, PATCH /toggle-online)
-│           ├── admin.py            # Admin portal (/users, /partners/pending, /partners/{id}/verify)
-│           └── health.py          # Liveness & MongoDB connectivity health check
-├── core/
-│   ├── config.py                  # Pydantic BaseSettings environment loader (ADMIN_EMAIL="helpingservicesteam@gmail.com")
-│   ├── security.py                # Password hashing & JWT token processing with role claims
-│   ├── database.py                # Motor client & Beanie ODM initialization
-│   ├── middleware.py              # Custom headers & CORS middleware configuration
-│   └── exceptions.py              # Custom application exceptions & error handlers
-├── crud/
-│   └── crud_user.py               # Repository pattern layer for Users, Partners & Admin
-├── models/
-│   ├── user.py                    # Beanie User & Delivery Partner Document model
-│   └── otp.py                     # Beanie OTP Document model
-├── schemas/
-│   ├── gender.py                  # Gender enum (male, female, other)
-│   ├── partner.py                 # DeliveryMode enum (cycle, walking), PartnerProfile, PartnerCreate, PartnerChangePassword
-│   ├── auth_otp.py                # OTP request, verify & response schemas
-│   ├── role.py                    # UserRole enum (user, partner, admin)
-│   ├── token.py                   # JWT Token request/response schemas
-│   ├── user.py                    # CustomerUserCreate & User response models
-│   └── response.py                # Generic API response envelope model
-├── services/
-│   ├── auth_service.py            # Multi-role signup, designated Admin OTP & OTP workflow logic
-│   ├── partner_service.py         # Partner application, 7-day cooldown, admin approval & password change
-│   └── otp_service.py             # Cryptographic OTP generator & verifier
-└── main.py                        # FastAPI application factory & lifespan context
-tests/                             # Pytest test suite (test_admin, test_auth_otp, test_auth, test_partner, test_users, test_health)
-Dockerfile                         # Multi-stage production container image build
-docker-compose.yml                 # Local container environment (FastAPI + MongoDB)
+Helper-FullStack-Backend/
+├── app/
+│   ├── api/
+│   │   ├── deps.py                 # Shared API dependencies (Auth, GPS, Admin RBAC)
+│   │   └── v1/
+│   │       ├── router.py           # Main API Router aggregator
+│   │       └── endpoints/
+│   │           ├── admin.py        # Admin management & partner verification
+│   │           ├── admin_dashboard.py # Realtime operations & analytics dashboard
+│   │           ├── ai_chat.py      # Gemini AI customer support chat
+│   │           ├── assignment_service.py # Assignment writer orders
+│   │           ├── auth.py         # Multi-role OTP auth & login endpoints
+│   │           ├── cart.py         # Shopping cart / bucket operations
+│   │           ├── health.py       # Health check & MongoDB liveness ping
+│   │           ├── orders.py       # Quick Commerce, Print, Porter order endpoints
+│   │           ├── partner.py      # Delivery partner profile & toggle online
+│   │           ├── payments.py     # Razorpay Order creation, signature verification & webhooks
+│   │           ├── print_service.py# Xerox document upload & page estimation
+│   │           ├── products.py     # Product catalog CRUD
+│   │           ├── support.py      # Support tickets & user reports
+│   │           ├── users.py        # Customer profile management
+│   │           ├── wallet.py       # Partner wallet earnings & admin payout approvals
+│   │           └── ws.py           # WebSocket endpoint for real-time updates
+│   ├── core/
+│   │   ├── config.py               # Pydantic BaseSettings environment loader
+│   │   ├── database.py             # Beanie ODM & Motor MongoDB connection setup
+│   │   ├── exceptions.py           # Custom exception classes & error handlers
+│   │   ├── middleware.py           # CORS, logging & rate limiting middleware
+│   │   └── security.py             # JWT token processing & bcrypt hashing
+│   ├── crud/                       # Database repository layer
+│   │   ├── crud_cart.py
+│   │   ├── crud_order.py
+│   │   ├── crud_product.py
+│   │   ├── crud_support.py
+│   │   └── crud_user.py
+│   ├── models/                     # Beanie ODM Document models
+│   │   ├── cart.py
+│   │   ├── order.py
+│   │   ├── otp.py
+│   │   ├── product.py
+│   │   ├── support_ticket.py
+│   │   ├── user.py
+│   │   ├── wallet.py
+│   │   └── withdrawal.py
+│   ├── schemas/                    # Pydantic validation schemas
+│   │   ├── ai_chat.py
+│   │   ├── assignment_service.py
+│   │   ├── location.py
+│   │   ├── order.py
+│   │   ├── partner.py
+│   │   ├── payment.py              # Razorpay payment schemas
+│   │   ├── print_service.py
+│   │   ├── product.py
+│   │   ├── response.py             # Generic APIResponse envelope model
+│   │   ├── user.py
+│   │   └── wallet.py
+│   ├── services/                   # Application Domain Services
+│   │   ├── ai_chat_service.py
+│   │   ├── analytics_service.py
+│   │   ├── dispatch_engine.py
+│   │   ├── geo_service.py
+│   │   ├── google_sheets_service.py
+│   │   ├── page_counter_service.py
+│   │   ├── print_pricing_engine.py
+│   │   ├── razorpay_service.py     # Razorpay Gateway service
+│   │   ├── redis_service.py
+│   │   ├── s3_service.py
+│   │   ├── surge_pricing_engine.py
+│   │   ├── wallet_service.py
+│   │   └── websocket_manager.py
+│   └── main.py                     # FastAPI application factory & lifespan initializer
+├── tests/                          # Automated Pytest suite
+│   ├── conftest.py                 # Test DB fixtures & async client
+│   └── api/                        # Integration API tests
+│       ├── test_admin.py
+│       ├── test_orders.py
+│       ├── test_partner.py
+│       ├── test_payments.py       # Razorpay integration test suite
+│       └── test_wallet_and_withdrawals.py
+├── .env.example                    # Environment variable template
+├── architecture.md                 # System architecture documentation
+├── rules.md                        # Development standards & rules
+├── memory.md                       # Persistent memory log
+├── Dockerfile                      # Production Docker container setup
+├── docker-compose.yml              # Local container orchestration
+├── pyproject.toml                  # Python project metadata
+└── requirements.txt                # Production dependencies
 ```
 
 ---
 
-## 🛠️ Local Setup & Getting Started
+## ⚡ Quick Start & Development Setup
 
 ### 1. Prerequisites
-- Python 3.10+ installed
-- Virtual environment (`.venv`)
+- Python 3.10 or higher
+- MongoDB instance (local or MongoDB Atlas connection string)
+- Virtual Environment (`.venv`)
 
-### 2. Install Dependencies
+### 2. Environment Setup
+Copy `.env.example` to `.env` and fill in the required configuration variables:
+```bash
+cp .env.example .env
+```
+
+Key environment variables:
+```env
+MONGODB_URL="mongodb+srv://user:pass@cluster.mongodb.net/?retryWrites=true&w=majority"
+MONGODB_DB_NAME="helper_services_db"
+SECRET_KEY="super-secret-jwt-key"
+RAZORPAY_KEY_ID="rzp_live_your_key_id"
+RAZORPAY_KEY_SECRET="your_key_secret"
+```
+
+### 3. Install Dependencies
 ```bash
 # On Windows (PowerShell):
 .venv\Scripts\pip install -r requirements.txt
@@ -90,27 +193,16 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Environment Configuration
-Copy `.env.example` to `.env`:
+### 4. Launch Development Server
 ```bash
-cp .env.example .env
-```
-
-### 4. Run MongoDB Container (Local Development)
-```bash
-docker compose up db -d
-```
-
-### 5. Run the Development Server
-```bash
-# Windows
+# On Windows:
 .venv\Scripts\uvicorn app.main:app --reload --port 8000
 
-# Linux/macOS
+# On Linux/macOS:
 uvicorn app.main:app --reload --port 8000
 ```
 
-Access the interactive API documentation at:
+Access the interactive API documentation:
 - **Swagger UI**: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - **ReDoc**: [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc)
 
@@ -118,8 +210,7 @@ Access the interactive API documentation at:
 
 ## 🧪 Running Automated Tests
 
-Run the full test suite with `pytest`:
-
+Run the full automated pytest suite:
 ```bash
 # Windows
 .venv\Scripts\pytest -v
@@ -128,54 +219,23 @@ Run the full test suite with `pytest`:
 pytest -v
 ```
 
+To run only Razorpay Payment Gateway tests:
+```bash
+.venv\Scripts\pytest tests/api/test_payments.py
+```
+
 ---
 
 ## 🐳 Docker Deployment
 
-Run the complete production stack (FastAPI app + MongoDB database) using Docker Compose:
-
+To build and run the full stack (FastAPI app + MongoDB) with Docker Compose:
 ```bash
 docker-compose up --build -d
 ```
-The backend API will be available at `http://localhost:8000`.
+The API server will be available at `http://localhost:8000`.
 
 ---
 
-## 📐 Vercel Serverless Deployment
+## 📄 License & Contact
 
-This FastAPI backend is pre-configured for serverless deployment on **Vercel** using `@vercel/python`.
-
-### 1. Prerequisites
-- A **Vercel** account ([vercel.com](https://vercel.com/))
-- A **MongoDB Atlas** cloud database instance (Vercel serverless functions cannot connect to `localhost`).
-- Vercel CLI installed locally (`npm i -g vercel`) or connection via GitHub repository.
-
-### 2. Required Environment Variables on Vercel
-In your Vercel Project Settings -> **Environment Variables**, add:
-- `MONGODB_URL`: Your MongoDB Atlas connection string (`mongodb+srv://user:pass@cluster.mongodb.net/fastapi_db?retryWrites=true&w=majority`)
-- `MONGODB_DB_NAME`: Database name (e.g. `fastapi_db`)
-- `SECRET_KEY`: A cryptographically secure secret key (`openssl rand -hex 32`)
-- `BACKEND_CORS_ORIGINS`: JSON array of allowed origins e.g. `["https://your-frontend-app.vercel.app"]`
-- `ENVIRONMENT`: `production`
-- `DEBUG`: `false`
-- `ADMIN_EMAIL`: `helpingservicesteam@gmail.com`
-- `SMTP_*` & `AWS_*` variables if using Email OTP and S3 upload features.
-
-### 3. Deploying via Vercel CLI
-```bash
-# Login to Vercel
-vercel login
-
-# Deploy to preview
-vercel
-
-# Deploy to production
-vercel --prod
-```
-
-### 4. Direct Deployment via GitHub
-1. Push your repository to GitHub.
-2. Go to [Vercel Dashboard](https://vercel.com/new) -> Import Repository.
-3. Vercel automatically detects `vercel.json` and `api/index.py`.
-4. Configure the **Environment Variables** in the Vercel dashboard and click **Deploy**.
-
+Developed for **Helping Services Team** (`helpingservicesteam@gmail.com`). All rights reserved.

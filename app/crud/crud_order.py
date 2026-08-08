@@ -377,12 +377,43 @@ class CRUDOrder:
 
         return updated
 
+    async def get_partner_assigned_orders(
+        self, partner_id: str, is_active: Optional[bool] = None, skip: int = 0, limit: int = 100
+    ) -> List[Order]:
+        """Fetch orders assigned to a specific delivery partner."""
+        query = Order.find(Order.partner_id == partner_id)
+        if is_active is True:
+            from beanie.operators import In
+            query = query.find(In(Order.status, [OrderStatus.ACCEPTED, OrderStatus.ASSIGNED, OrderStatus.DOCUMENT_PICKED_UP, OrderStatus.OUT_FOR_DELIVERY]))
+        elif is_active is False:
+            from beanie.operators import In
+            query = query.find(In(Order.status, [OrderStatus.DELIVERED, OrderStatus.CANCELLED]))
+
+        return await query.sort("-created_at").skip(skip).limit(limit).to_list()
+
     async def update_order_status(self, order_id: str, status: OrderStatus) -> Order:
         order = await self.get_by_id(order_id)
         if not order:
             raise NotFoundException("Order not found.")
 
+        old_status = order.status
         order.status = status
+
+        # Handle automatic refund if order is cancelled and was paid via Razorpay
+        if status == OrderStatus.CANCELLED and old_status != OrderStatus.CANCELLED:
+            if order.payment_status == PaymentStatus.PAID and order.razorpay_payment_id:
+                try:
+                    from app.services.razorpay_service import razorpay_service
+                    razorpay_service.refund_payment(
+                        payment_id=order.razorpay_payment_id,
+                        amount_in_rupees=order.total_amount,
+                        notes={"order_id": order.order_id, "reason": "Order cancelled"},
+                    )
+                    order.payment_status = PaymentStatus.FAILED
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error(f"Refund attempt failed for cancelled order {order.order_id}: {str(e)}")
+
         order.touch()
         await order.save()
 
@@ -398,6 +429,6 @@ class CRUDOrder:
         return order
 
 
-
 order_crud = CRUDOrder()
+
 

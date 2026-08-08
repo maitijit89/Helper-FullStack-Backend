@@ -78,10 +78,15 @@ class Settings(BaseSettings):
     GOOGLE_SERVICE_ACCOUNT_INFO: str = ""
     GOOGLE_SHEET_WEBHOOK_URL: str = ""
 
-    # Rate Limiting Configuration
+    # Razorpay Payment Gateway Configuration
+    RAZORPAY_KEY_ID: str = ""
+    RAZORPAY_KEY_SECRET: str = ""
+    RAZORPAY_WEBHOOK_SECRET: str = ""
 
+    # Rate Limiting Configuration
     RATE_LIMIT_PER_MINUTE: int = 60
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10
+
 
     model_config = SettingsConfigDict(
         env_file=".env",

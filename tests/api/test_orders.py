@@ -115,3 +115,61 @@ async def test_porter_service_overweight_rejection(
         headers=normal_user_token_headers,
     )
     assert res.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_partner_my_deliveries_endpoint(
+    client: AsyncClient, partner_user, partner_token_headers: dict
+):
+    from app.models.order import Order, OrderType, OrderStatus
+    order = Order(
+        order_id="ORD-PRT-001",
+        customer_id="cust_123",
+        partner_id=str(partner_user.id),
+        order_type=OrderType.PRODUCT_ORDER,
+        status=OrderStatus.ACCEPTED,
+        total_amount=150.0,
+    )
+    await order.save()
+
+    res = await client.get(
+        "/api/v1/orders/partner/my-deliveries",
+        headers=partner_token_headers,
+    )
+    assert res.status_code == 200
+    data = res.json()
+    assert data["success"] is True
+    assert len(data["data"]) >= 1
+    assert data["data"][0]["order_id"] == "ORD-PRT-001"
+
+
+@pytest.mark.asyncio
+async def test_customer_cancel_order_and_authorization(
+    client: AsyncClient, test_user, normal_user_token_headers: dict, partner_token_headers: dict
+):
+    from app.models.order import Order, OrderType, OrderStatus
+    order = Order(
+        order_id="ORD-CANCEL-001",
+        customer_id=str(test_user.id),
+        order_type=OrderType.PRODUCT_ORDER,
+        status=OrderStatus.PENDING,
+        total_amount=200.0,
+    )
+    await order.save()
+
+    # Partner attempts to update status on unassigned order -> Forbidden 403
+    unauth_res = await client.patch(
+        f"/api/v1/orders/{order.order_id}/status",
+        json={"status": "delivered"},
+        headers=partner_token_headers,
+    )
+    assert unauth_res.status_code == 403
+
+    # Customer cancels their pending order -> Success 200
+    cancel_res = await client.patch(
+        f"/api/v1/orders/{order.order_id}/cancel",
+        headers=normal_user_token_headers,
+    )
+    assert cancel_res.status_code == 200
+    assert cancel_res.json()["data"]["status"] == "cancelled"
+

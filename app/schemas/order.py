@@ -84,6 +84,9 @@ class OrderResponse(BaseModel):
     payment_method: PaymentMethod = PaymentMethod.CASH
     payment_status: PaymentStatus = PaymentStatus.PENDING
     upi_transaction_id: Optional[str] = None
+    razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+
     items: List[OrderItem] = []
     print_spec: Optional[PrintServiceSpec] = None
     porter_spec: Optional[PorterServiceSpec] = None

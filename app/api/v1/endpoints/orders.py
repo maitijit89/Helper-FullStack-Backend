@@ -1,5 +1,6 @@
 import os
-from typing import Any, List
+from typing import Any, List, Optional
+
 from fastapi import APIRouter, Depends, status
 from app.api.deps import get_current_active_user, get_current_partner_with_gps
 from app.core.exceptions import BadRequestException, ForbiddenException, NotFoundException
@@ -153,21 +154,93 @@ async def confirm_physical_document_pickup(
     )
 
 
+@router.get("/partner/my-deliveries", response_model=APIResponse[List[OrderResponse]])
+async def get_partner_assigned_deliveries(
+    is_active: Optional[bool] = None,
+    skip: int = 0,
+    limit: int = 100,
+    current_partner: User = Depends(get_current_partner_with_gps),
+) -> Any:
+    """List orders assigned to current delivery partner (active or completed)."""
+    orders = await order_crud.get_partner_assigned_orders(
+        partner_id=str(current_partner.id), is_active=is_active, skip=skip, limit=limit
+    )
+    return APIResponse(
+        success=True,
+        message="Partner assigned deliveries fetched successfully",
+        data=[OrderResponse.model_validate(o) for o in orders],
+    )
+
+
+@router.patch("/{order_id}/cancel", response_model=APIResponse[OrderResponse])
+async def cancel_order(
+    order_id: str,
+    current_user: User = Depends(get_current_active_user),
+) -> Any:
+    """
+    Cancel an active order placed by customer.
+    Allowed for customer before order goes out for delivery, or for Admin.
+    Triggers automatic Razorpay refund if the order was prepaid online.
+    """
+    order = await order_crud.get_by_id(order_id)
+    if not order:
+        raise NotFoundException("Order not found")
+
+    user_id_str = str(current_user.id)
+    if order.customer_id != user_id_str and not current_user.is_superuser:
+        raise ForbiddenException("You are not authorized to cancel this order.")
+
+    if order.status in [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
+        raise BadRequestException(f"Cannot cancel order in status '{order.status.value}'.")
+
+    updated_order = await order_crud.update_order_status(
+        order_id=order_id, status=OrderStatus.CANCELLED
+    )
+    return APIResponse(
+        success=True,
+        message="Order cancelled successfully. Any online payment will be refunded.",
+        data=OrderResponse.model_validate(updated_order),
+    )
+
+
 @router.patch("/{order_id}/status", response_model=APIResponse[OrderResponse])
 async def update_order_status(
     order_id: str,
     status_in: OrderStatusUpdate,
     current_user: User = Depends(get_current_active_user),
 ) -> Any:
-    """Update order status (document_picked_up, out_for_delivery, delivered, cancelled)."""
-    order = await order_crud.update_order_status(
+    """
+    Update order status (document_picked_up, out_for_delivery, delivered, cancelled).
+    Requires authorization check for customer, assigned delivery partner, or admin.
+    """
+    order = await order_crud.get_by_id(order_id)
+    if not order:
+        raise NotFoundException("Order not found")
+
+    user_id_str = str(current_user.id)
+    is_customer = (order.customer_id == user_id_str)
+    is_assigned_partner = (order.partner_id == user_id_str)
+    is_admin = current_user.is_superuser
+
+    if not (is_customer or is_assigned_partner or is_admin):
+        raise ForbiddenException("You are not authorized to update the status of this order.")
+
+    # Restrict Customer capabilities
+    if is_customer and not is_admin:
+        if status_in.status != OrderStatus.CANCELLED:
+            raise ForbiddenException("Customers can only update order status to CANCELLED.")
+        if order.status in [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.DELIVERED, OrderStatus.CANCELLED]:
+            raise BadRequestException(f"Cannot cancel order currently in '{order.status.value}' status.")
+
+    updated_order = await order_crud.update_order_status(
         order_id=order_id, status=status_in.status
     )
     return APIResponse(
         success=True,
         message=f"Order status updated to {status_in.status.value}",
-        data=OrderResponse.model_validate(order),
+        data=OrderResponse.model_validate(updated_order),
     )
+
 
 
 

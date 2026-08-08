@@ -37,6 +37,12 @@ class ForbiddenException(AppException):
         super().__init__(message=message, status_code=status.HTTP_403_FORBIDDEN)
 
 
+class InternalServerErrorException(AppException):
+    def __init__(self, message: str = "Internal server error"):
+        super().__init__(message=message, status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 import logging
 import traceback
 
