@@ -138,3 +138,44 @@ Run the complete production stack (FastAPI app + MongoDB database) using Docker 
 docker-compose up --build -d
 ```
 The backend API will be available at `http://localhost:8000`.
+
+---
+
+## 📐 Vercel Serverless Deployment
+
+This FastAPI backend is pre-configured for serverless deployment on **Vercel** using `@vercel/python`.
+
+### 1. Prerequisites
+- A **Vercel** account ([vercel.com](https://vercel.com/))
+- A **MongoDB Atlas** cloud database instance (Vercel serverless functions cannot connect to `localhost`).
+- Vercel CLI installed locally (`npm i -g vercel`) or connection via GitHub repository.
+
+### 2. Required Environment Variables on Vercel
+In your Vercel Project Settings -> **Environment Variables**, add:
+- `MONGODB_URL`: Your MongoDB Atlas connection string (`mongodb+srv://user:pass@cluster.mongodb.net/fastapi_db?retryWrites=true&w=majority`)
+- `MONGODB_DB_NAME`: Database name (e.g. `fastapi_db`)
+- `SECRET_KEY`: A cryptographically secure secret key (`openssl rand -hex 32`)
+- `BACKEND_CORS_ORIGINS`: JSON array of allowed origins e.g. `["https://your-frontend-app.vercel.app"]`
+- `ENVIRONMENT`: `production`
+- `DEBUG`: `false`
+- `ADMIN_EMAIL`: `helpingservicesteam@gmail.com`
+- `SMTP_*` & `AWS_*` variables if using Email OTP and S3 upload features.
+
+### 3. Deploying via Vercel CLI
+```bash
+# Login to Vercel
+vercel login
+
+# Deploy to preview
+vercel
+
+# Deploy to production
+vercel --prod
+```
+
+### 4. Direct Deployment via GitHub
+1. Push your repository to GitHub.
+2. Go to [Vercel Dashboard](https://vercel.com/new) -> Import Repository.
+3. Vercel automatically detects `vercel.json` and `api/index.py`.
+4. Configure the **Environment Variables** in the Vercel dashboard and click **Deploy**.
+

@@ -5,8 +5,31 @@ from app.schemas.product import ProductResponse
 from app.schemas.search import ProductSearchResultItem, ProductSearchResponse, SuggestionsResponse
 
 
+def calculate_levenshtein_distance(str1: str, str2: str) -> int:
+
+    """Calculate the Levenshtein edit distance between two strings."""
+    if str1 == str2:
+        return 0
+    if len(str1) == 0:
+        return len(str2)
+    if len(str2) == 0:
+        return len(str1)
+
+    v0 = list(range(len(str2) + 1))
+    v1 = [0] * (len(str2) + 1)
+
+    for i in range(len(str1)):
+        v1[0] = i + 1
+        for j in range(len(str2)):
+            cost = 0 if str1[i] == str2[j] else 1
+            v1[j + 1] = min(v1[j] + 1, v0[j + 1] + 1, v0[j] + cost)
+        v0 = list(v1)
+
+    return v1[len(str2)]
+
+
 class ProductSearchEngine:
-    """Intelligent Search Engine with Intent Analysis, Synonym Expansion, and Weighted Relevance Algorithm."""
+    """Intelligent Search Engine with Intent Analysis, Fuzzy Matching (Levenshtein), Synonym Expansion, and Weighted Relevance Algorithm."""
 
     # Knowledge Base: Intent & Synonym Dictionary
     SYNONYM_MAP = {
@@ -51,11 +74,19 @@ class ProductSearchEngine:
         expanded_keywords = set(tokens)
 
         for token in tokens:
+            # Check exact synonym match
             if token in self.SYNONYM_MAP:
                 cat, synonyms = self.SYNONYM_MAP[token]
                 if not suggested_category:
                     suggested_category = cat
                 expanded_keywords.update(synonyms)
+            else:
+                # Check fuzzy synonym match (Levenshtein distance <= 2)
+                for dict_key, (cat, synonyms) in self.SYNONYM_MAP.items():
+                    if calculate_levenshtein_distance(token, dict_key) <= 2:
+                        if not suggested_category:
+                            suggested_category = cat
+                        expanded_keywords.update(synonyms)
 
         return suggested_category, list(expanded_keywords)
 
@@ -97,6 +128,14 @@ class ProductSearchEngine:
             if token in name_words:
                 score += 20.0
                 reasons.append(f"TokenNameMatch:{token} (+20)")
+            else:
+                # Fuzzy Token Match using Levenshtein distance
+                for w in name_words:
+                    dist = calculate_levenshtein_distance(token, w)
+                    if dist <= 2 and len(token) > 3:
+                        fuzzy_score = max(5.0, 15.0 - (dist * 4.0))
+                        score += fuzzy_score
+                        reasons.append(f"FuzzyTokenMatch:{token}->{w} (+{fuzzy_score})")
 
         # 5. Synonym / Expanded Keyword Matches in Name or Tags (+15)
         product_tags = [self._normalize(t) for t in (product.tags + product.search_keywords)]
@@ -121,6 +160,7 @@ class ProductSearchEngine:
             reasons.append("InStockBonus (+5)")
 
         return score, reasons
+
 
     def search_and_rank(
         self,

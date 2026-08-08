@@ -6,12 +6,25 @@ import pytest
 import app.core.database as db_module
 from app.core.security import create_access_token
 from app.crud import user_crud
-from app.main import app
-from app.models import OTP, Order, Product, User
+from app.core.config import settings
+from app.main import ALL_MODELS, app
+from app.models import (
+    OTP,
+    Cart,
+    Order,
+    PartnerWallet,
+    Product,
+    SupportTicket,
+    User,
+    WalletTransaction,
+    WithdrawalRequest,
+)
 from app.schemas.gender import Gender
-from app.schemas.partner import PartnerCreate, PartnerVerificationStatus
 from app.schemas.role import UserRole
 from app.schemas.user import CustomerUserCreate
+
+settings.ENVIRONMENT = "testing"
+
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -19,14 +32,16 @@ def anyio_backend():
     return "asyncio"
 
 
+
 @pytest.fixture(scope="function", autouse=True)
 async def init_test_db():
     """Initialize mock MongoDB client & Beanie for testing."""
     client = AsyncMongoMockClient()
     db_module.motor_client = client
+    db_module.is_initialized = True
     await init_beanie(
         database=client.get_database("fastapi_test_db"),
-        document_models=[User, OTP, Product, Order],
+        document_models=ALL_MODELS,
     )
     yield
     # Clean up collections after test
@@ -34,7 +49,17 @@ async def init_test_db():
     await OTP.delete_all()
     await Product.delete_all()
     await Order.delete_all()
+    await Cart.delete_all()
+    await SupportTicket.delete_all()
+    await PartnerWallet.delete_all()
+    await WalletTransaction.delete_all()
+    await WithdrawalRequest.delete_all()
     db_module.motor_client = None
+    db_module.is_initialized = False
+
+
+
+
 
 
 @pytest.fixture(scope="function")
@@ -69,21 +94,29 @@ async def normal_user_token_headers(test_user) -> dict[str, str]:
     return {"Authorization": f"Bearer {access_token}"}
 
 
+from app.schemas.partner import DeliveryMode, PartnerCreate, PartnerVerificationStatus
+
+
 @pytest.fixture(scope="function")
 async def partner_user():
     """Fixture providing an approved delivery partner user."""
     partner_in = PartnerCreate(
+        name="Test Partner Driver",
+        dob="1998-05-12",
         email="partner@example.com",
-        password="PartnerPassword123!",
-        full_name="Test Partner Driver",
-        vehicle_type="scooter",
-        vehicle_number="MH-12-AB-1234",
-        license_number="DL1234567890",
+        phone="+919876543299",
+        college="Tech Institute",
+        current_address="12 Park Street",
+        permanent_address="45 Green Avenue",
+        delivery_mode=DeliveryMode.CYCLE,
     )
-    partner = await user_crud.create_partner(obj_in=partner_in)
-    return await user_crud.verify_partner(
-        db_obj=partner, status=PartnerVerificationStatus.APPROVED
-    )
+    partner = await user_crud.create_partner_application(obj_in=partner_in)
+    approved_partner, _, _ = await user_crud.approve_partner(db_obj=partner)
+    from app.schemas.location import GPSLocation
+    approved_partner.is_gps_enabled = True
+    approved_partner.location = GPSLocation(latitude=19.0760, longitude=72.8770, is_gps_enabled=True)
+    await approved_partner.save()
+    return approved_partner
 
 
 @pytest.fixture(scope="function")
@@ -98,6 +131,13 @@ async def partner_token_headers(partner_user) -> dict[str, str]:
 @pytest.fixture(scope="function")
 async def admin_user():
     """Fixture providing an Admin user."""
+    existing = await user_crud.get_by_email(email="admin@example.com")
+    if existing:
+        existing.role = UserRole.ADMIN
+        existing.is_superuser = True
+        await existing.save()
+        return existing
+
     user_in = CustomerUserCreate(
         name="System Admin",
         dob="1990-05-20",
@@ -112,6 +152,7 @@ async def admin_user():
     admin.is_superuser = True
     await admin.save()
     return admin
+
 
 
 @pytest.fixture(scope="function")

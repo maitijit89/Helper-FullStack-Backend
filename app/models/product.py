@@ -36,6 +36,13 @@ class Product(Document):
 
     class Settings:
         name = "products"
+        indexes = [
+            "category",
+            "is_available",
+            [("category", 1), ("is_available", 1)],
+            [("is_available", 1), ("price", 1)],
+        ]
+
 
     def touch(self):
         self.updated_at = datetime.now(timezone.utc)

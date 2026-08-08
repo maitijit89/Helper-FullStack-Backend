@@ -48,11 +48,36 @@ async def update_user_location(
     updated_user = await user_crud.update_user_location(
         db_obj=current_user, location_in=location_in
     )
+
+    # Push live location update to active orders of customer
+    from beanie.operators import In
+    from app.models.order import Order, OrderStatus
+    from app.services.websocket_manager import socket_manager
+
+    active_orders = await Order.find(
+        Order.customer_id == str(updated_user.id),
+        In(Order.status, [OrderStatus.ACCEPTED, OrderStatus.ASSIGNED, OrderStatus.OUT_FOR_DELIVERY]),
+    ).to_list()
+
+
+    for order in active_orders:
+        # Also update delivery_location in order
+        order.delivery_location = updated_user.location
+        await order.save()
+
+        await socket_manager.broadcast_order_live_location(
+            order_id=order.order_id,
+            sender_role="customer",
+            sender_id=str(updated_user.id),
+            location_payload=location_in.model_dump(),
+        )
+
     return APIResponse(
         success=True,
         message="GPS location updated successfully",
         data=UserResponse.model_validate(updated_user),
     )
+
 
 
 @router.delete("/me", response_model=APIResponse[dict])

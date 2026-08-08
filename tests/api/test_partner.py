@@ -161,3 +161,44 @@ async def test_partner_location_and_online_toggle(client: AsyncClient, admin_tok
     assert online_res_success.status_code == 200
     assert online_res_success.json()["data"]["partner_profile"]["is_online"] is True
 
+
+@pytest.mark.asyncio
+async def test_partner_application_fee_validation(client: AsyncClient):
+    # Case 1: Application fee less than RS 1 -> Expect 400 Bad Request
+    fail_payload = {
+        "name": "No Fee Driver",
+        "dob": "1996-05-20",
+        "email": "nofee@delivery.com",
+        "phone": "+919999900000",
+        "college": "State University",
+        "current_address": "Street 1",
+        "permanent_address": "Street 2",
+        "delivery_mode": "bike",
+        "application_fee": 0.0,
+    }
+    fail_res = await client.post("/api/v1/auth/signup/partner", json=fail_payload)
+    assert fail_res.status_code == 400
+    assert "RS 1" in fail_res.json()["error"]["message"]
+
+    # Case 2: Valid RS 1 application fee with UPI transaction ID -> Expect 201 Created
+    valid_payload = {
+        "name": "Fee Paid Driver",
+        "dob": "1996-05-20",
+        "email": "feepaid@delivery.com",
+        "phone": "+919999911111",
+        "college": "State University",
+        "current_address": "Street 1",
+        "permanent_address": "Street 2",
+        "delivery_mode": "bike",
+        "application_fee": 1.0,
+        "payment_method": "upi",
+        "upi_transaction_id": "UPI-TXN-987654321",
+    }
+    success_res = await client.post("/api/v1/auth/signup/partner", json=valid_payload)
+    assert success_res.status_code == 201
+    profile = success_res.json()["data"]["partner_profile"]
+    assert profile["application_fee_paid"] is True
+    assert profile["application_fee_amount"] == 1.0
+    assert profile["upi_transaction_id"] == "UPI-TXN-987654321"
+
+

@@ -35,6 +35,14 @@ class User(Document):
 
     class Settings:
         name = "users"
+        indexes = [
+            "role",
+            "phone",
+            [("role", 1), ("is_active", 1)],
+            [("role", 1), ("is_active", 1), ("is_gps_enabled", 1)],
+            [("created_at", -1)],
+        ]
+
 
     def touch(self):
         """Update updated_at timestamp."""

@@ -37,6 +37,12 @@ class ForbiddenException(AppException):
         super().__init__(message=message, status_code=status.HTTP_403_FORBIDDEN)
 
 
+import logging
+import traceback
+
+logger = logging.getLogger(__name__)
+
+
 def setup_exception_handlers(app: FastAPI) -> None:
     """Register custom exception handlers for standardized JSON responses."""
 
@@ -59,11 +65,11 @@ def setup_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: RequestValidationError
     ):
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=422,
             content={
                 "success": False,
                 "error": {
-                    "code": status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    "code": 422,
                     "message": "Validation Error",
                     "details": jsonable_encoder(exc.errors()),
                 },
@@ -82,3 +88,24 @@ def setup_exception_handlers(app: FastAPI) -> None:
                 },
             },
         )
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.error(
+            "Unhandled server error on %s %s: %s\n%s",
+            request.method,
+            request.url.path,
+            exc,
+            traceback.format_exc(),
+        )
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "success": False,
+                "error": {
+                    "code": status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    "message": "Internal Server Error",
+                },
+            },
+        )
+

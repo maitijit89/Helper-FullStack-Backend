@@ -50,11 +50,32 @@ async def update_partner_location(
     updated_partner = await user_crud.update_user_location(
         db_obj=current_partner, location_in=location_in
     )
+
+    # Push live location update to active orders assigned to partner
+    from beanie.operators import In
+    from app.models.order import Order, OrderStatus
+    from app.services.websocket_manager import socket_manager
+
+    active_orders = await Order.find(
+        Order.partner_id == str(updated_partner.id),
+        In(Order.status, [OrderStatus.ACCEPTED, OrderStatus.ASSIGNED, OrderStatus.OUT_FOR_DELIVERY]),
+    ).to_list()
+
+
+    for order in active_orders:
+        await socket_manager.broadcast_order_live_location(
+            order_id=order.order_id,
+            sender_role="partner",
+            sender_id=str(updated_partner.id),
+            location_payload=location_in.model_dump(),
+        )
+
     return APIResponse(
         success=True,
         message="Delivery partner GPS location updated successfully",
         data=UserResponse.model_validate(updated_partner),
     )
+
 
 
 @router.put("/change-password", response_model=APIResponse[UserResponse])
@@ -93,3 +114,19 @@ async def toggle_online(
         message=f"Partner is now {status_str}",
         data=UserResponse.model_validate(updated_partner),
     )
+
+
+@router.get("/ringing-orders", response_model=APIResponse[list])
+async def get_ringing_orders(
+    current_partner: User = Depends(get_current_partner),
+) -> Any:
+    """Fetch active ringing order calls for open partner app within 1 KM radius."""
+    from app.services.websocket_manager import socket_manager
+
+    ringing = socket_manager.get_active_ringing_orders_for_partner(str(current_partner.id))
+    return APIResponse(
+        success=True,
+        message="Active ringing orders fetched successfully",
+        data=ringing,
+    )
+

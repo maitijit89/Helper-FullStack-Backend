@@ -1,7 +1,8 @@
 from app.core.config import settings
 from app.core.exceptions import BadRequestException, NotFoundException, UnauthorizedException
 from app.core.security import create_access_token, create_refresh_token
-from app.crud import user_crud
+from app.crud.crud_user import user_crud
+
 from app.models.otp import OTP
 from app.models.user import User
 from app.schemas.auth_otp import OTPPurpose, OTPResponse
@@ -10,6 +11,9 @@ from app.schemas.role import UserRole
 from app.schemas.token import Token
 from app.schemas.user import CustomerUserCreate, UserCreate
 from app.services.otp_service import otp_service
+
+
+from app.services.google_sheets_service import google_sheets_service
 
 
 class AuthService:
@@ -22,6 +26,13 @@ class AuthService:
             raise BadRequestException("A user with this email already exists.")
 
         user = await user_crud.create_customer(obj_in=user_in)
+
+        # Sync user registration to Google Sheets
+        try:
+            await google_sheets_service.sync_new_user_registration(user)
+        except Exception as e:
+            pass
+
         otp = await otp_service.create_otp(
             email=user.email, purpose=OTPPurpose.VERIFICATION
         )
@@ -36,11 +47,18 @@ class AuthService:
         await otp_service.verify_otp(
             email=email, code=code, purpose=OTPPurpose.VERIFICATION
         )
-        await user_crud.mark_email_verified(db_obj=user)
+        updated_user = await user_crud.mark_email_verified(db_obj=user)
 
-        access_token = create_access_token(subject=str(user.id), role=user.role)
-        refresh_token = create_refresh_token(subject=str(user.id), role=user.role)
+        # Sync user verification status to Google Sheets
+        try:
+            await google_sheets_service.sync_user_status_update(updated_user)
+        except Exception as e:
+            pass
+
+        access_token = create_access_token(subject=str(updated_user.id), role=updated_user.role)
+        refresh_token = create_refresh_token(subject=str(updated_user.id), role=updated_user.role)
         return Token(access_token=access_token, refresh_token=refresh_token)
+
 
     async def request_admin_otp(self, email: str) -> OTP:
         """Request Admin OTP for designated admin email."""

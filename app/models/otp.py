@@ -18,6 +18,10 @@ class OTP(Document):
 
     class Settings:
         name = "otps"
+        indexes = [
+            "email",
+            [("email", 1), ("purpose", 1), ("is_used", 1)],
+        ]
 
     @property
     def is_expired(self) -> bool:

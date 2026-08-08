@@ -7,6 +7,7 @@ from app.core.security import get_password_hash, verify_password
 from app.models.user import User
 from app.schemas.location import GPSLocation, LocationUpdate
 from app.schemas.partner import (
+    AdminPartnerUpdate,
     PartnerCreate,
     PartnerProfile,
     PartnerUpdate,
@@ -19,9 +20,16 @@ from app.schemas.user import CustomerUserCreate, UserCreate, UserUpdate
 class CRUDUser:
     async def get_by_id(self, user_id: str) -> Optional[User]:
         try:
-            return await User.get(PydanticObjectId(user_id))
+            user = await User.get(PydanticObjectId(user_id))
+            if user:
+                return user
+            return await User.get(user_id)
         except Exception:
-            return None
+            try:
+                return await User.get(user_id)
+            except Exception:
+                return None
+
 
     async def get_by_email(self, email: str) -> Optional[User]:
         return await User.find_one(User.email == email)
@@ -110,11 +118,23 @@ class CRUDUser:
             permanent_address=obj_in.permanent_address,
             dob=obj_in.dob,
             phone=obj_in.phone,
+            aadhaar_number=obj_in.aadhaar_number,
+            pan_number=obj_in.pan_number,
+            aadhaar_url=obj_in.aadhaar_url,
+            pan_url=obj_in.pan_url,
+            selfie_url=obj_in.selfie_url,
             is_online=False,
             verification_status=PartnerVerificationStatus.PENDING,
             rejection_reason=None,
             last_application_date=now,
+            application_fee_paid=True,
+            application_fee_amount=obj_in.application_fee,
+            payment_method=obj_in.payment_method,
+            upi_transaction_id=obj_in.upi_transaction_id,
+            payment_timestamp=now,
         )
+
+
 
         existing_user = await self.get_by_email(email=obj_in.email)
         dummy_password = secrets.token_urlsafe(16)
@@ -241,6 +261,40 @@ class CRUDUser:
         db_obj.touch()
         await db_obj.save()
         return db_obj
+
+    async def update_partner_by_admin(
+        self, db_obj: User, obj_in: AdminPartnerUpdate
+    ) -> User:
+        """Allow Admin panel to patch any partner application fields."""
+        update_dict = obj_in.model_dump(exclude_unset=True)
+
+        user_fields = {"full_name", "phone", "college"}
+        profile_fields = {
+            "phone",
+            "college",
+            "dob",
+            "delivery_mode",
+            "current_address",
+            "permanent_address",
+            "aadhaar_number",
+            "pan_number",
+            "aadhaar_url",
+            "pan_url",
+            "selfie_url",
+            "verification_status",
+            "rejection_reason",
+        }
+
+        for k, v in update_dict.items():
+            if k in user_fields:
+                setattr(db_obj, k, v)
+            if db_obj.partner_profile and k in profile_fields:
+                setattr(db_obj.partner_profile, k, v)
+
+        db_obj.touch()
+        await db_obj.save()
+        return db_obj
+
 
     async def toggle_partner_online(
         self, db_obj: User, is_online: bool

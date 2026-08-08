@@ -1,4 +1,5 @@
-from typing import List
+from typing import List, Optional
+
 import jwt
 from fastapi import Depends
 from fastapi.security import OAuth2PasswordBearer
@@ -14,6 +15,9 @@ from app.schemas.token import TokenPayload
 reusable_oauth2 = OAuth2PasswordBearer(
     tokenUrl=f"{settings.API_V1_STR}/auth/login"
 )
+reusable_oauth2_optional = OAuth2PasswordBearer(
+    tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False
+)
 
 
 async def get_current_user(token: str = Depends(reusable_oauth2)) -> User:
@@ -24,15 +28,15 @@ async def get_current_user(token: str = Depends(reusable_oauth2)) -> User:
         token_data = TokenPayload(**payload)
         if token_data.type != "access":
             raise UnauthorizedException("Invalid token type")
-    except (jwt.PyJWTError, ValidationError):
-        raise UnauthorizedException("Could not validate credentials")
+    except (jwt.PyJWTError, ValidationError) as err:
+        raise UnauthorizedException(f"Could not validate credentials: {err}")
 
     if token_data.sub is None:
         raise UnauthorizedException("Token sub claim missing")
 
     user = await user_crud.get_by_id(user_id=token_data.sub)
     if not user:
-        raise UnauthorizedException("User not found")
+        raise UnauthorizedException(f"User not found for sub: {token_data.sub}")
     return user
 
 
@@ -42,6 +46,27 @@ async def get_current_active_user(
     if not current_user.is_active:
         raise UnauthorizedException("Inactive user account")
     return current_user
+
+
+async def get_optional_current_user(
+    token: Optional[str] = Depends(reusable_oauth2_optional)
+) -> Optional[User]:
+
+    """Dependency returning User if valid bearer token is provided, otherwise None."""
+    if not token:
+        return None
+    try:
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
+        token_data = TokenPayload(**payload)
+        if token_data.type != "access" or not token_data.sub:
+            return None
+        user = await user_crud.get_by_id(user_id=token_data.sub)
+        return user if user and user.is_active else None
+    except Exception:
+        return None
+
 
 
 def require_roles(allowed_roles: List[UserRole]):

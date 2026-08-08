@@ -5,6 +5,7 @@ from typing import Optional
 from app.core.exceptions import BadRequestException
 from app.models.otp import OTP
 from app.schemas.auth_otp import OTPPurpose
+from app.services.email_service import email_service
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,16 @@ class OTPService:
             purpose.value,
             expires_at,
         )
+
+        # Send OTP email via Google SMTP
+        await email_service.send_otp_email(
+            to_email=email,
+            otp_code=code,
+            purpose=purpose.value,
+        )
+
         return otp_obj
+
 
     async def verify_otp(
         self, email: str, code: str, purpose: OTPPurpose
