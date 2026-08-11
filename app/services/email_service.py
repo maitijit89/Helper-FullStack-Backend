@@ -2,12 +2,64 @@ import asyncio
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import logging
+import socket
 import smtplib
 from typing import Optional
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _create_connection_ipv4_fallback(address, timeout=None, source_address=None):
+    """
+    Creates a socket connection to (host, port).
+    If standard connection fails with OSError (e.g., Errno 101 Network is unreachable due to IPv6 routing issues),
+    it explicitly falls back to IPv4 (AF_INET) resolution.
+    """
+    host, port = address
+    try:
+        return socket.create_connection(address, timeout, source_address)
+    except OSError as err:
+        logger.warning(
+            "Default socket connection to %s:%s failed (%s). Retrying with explicit IPv4 fallback...",
+            host,
+            port,
+            err,
+        )
+        try:
+            infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        except OSError:
+            raise err
+
+        last_err = err
+        for res in infos:
+            af, socktype, proto, canonname, sa = res
+            sock = None
+            try:
+                sock = socket.socket(af, socktype, proto)
+                if timeout is not None:
+                    sock.settimeout(timeout)
+                if source_address:
+                    sock.bind(source_address)
+                sock.connect(sa)
+                return sock
+            except OSError as e:
+                last_err = e
+                if sock is not None:
+                    sock.close()
+        raise last_err
+
+
+class IPv4FallbackSMTP(smtplib.SMTP):
+    def _get_socket(self, host, port, timeout):
+        return _create_connection_ipv4_fallback((host, port), timeout, self.source_address)
+
+
+class IPv4FallbackSMTP_SSL(smtplib.SMTP_SSL):
+    def _get_socket(self, host, port, timeout):
+        new_socket = _create_connection_ipv4_fallback((host, port), timeout, self.source_address)
+        return self.context.wrap_socket(new_socket, server_hostname=self._host)
 
 
 class EmailService:
@@ -40,8 +92,14 @@ class EmailService:
             # Clean password by stripping spaces if present
             clean_password = settings.SMTP_PASSWORD.replace(" ", "")
             
-            with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
-                if settings.SMTP_TLS:
+            smtp_cls = (
+                IPv4FallbackSMTP_SSL
+                if (settings.SMTP_PORT == 465 or getattr(settings, "SMTP_SSL", False))
+                else IPv4FallbackSMTP
+            )
+
+            with smtp_cls(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
+                if settings.SMTP_TLS and smtp_cls is IPv4FallbackSMTP:
                     server.starttls()
                 server.login(settings.SMTP_USER, clean_password)
                 server.sendmail(settings.EMAILS_FROM_EMAIL, [to_email], message.as_string())

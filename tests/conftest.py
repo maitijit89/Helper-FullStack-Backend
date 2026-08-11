@@ -24,6 +24,7 @@ from app.schemas.role import UserRole
 from app.schemas.user import CustomerUserCreate
 
 settings.ENVIRONMENT = "testing"
+settings.DEBUG = True
 
 
 

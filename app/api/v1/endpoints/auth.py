@@ -38,7 +38,7 @@ async def signup_customer_user(user_in: CustomerUserCreate) -> Any:
         data=OTPResponse(
             email=user.email,
             message="Verification OTP sent",
-            dev_otp=otp.code if settings.DEBUG else None,
+            dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
 
@@ -66,7 +66,7 @@ async def request_admin_otp(req: OTPRequest) -> Any:
         data=OTPResponse(
             email=req.email,
             message="Admin OTP sent",
-            dev_otp=otp.code if settings.DEBUG else None,
+            dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
 
@@ -94,7 +94,7 @@ async def request_login_otp(req: OTPRequest) -> Any:
         data=OTPResponse(
             email=req.email,
             message="Login OTP sent",
-            dev_otp=otp.code if settings.DEBUG else None,
+            dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
 
@@ -122,7 +122,7 @@ async def resend_otp(req: OTPRequest, purpose: OTPPurpose = OTPPurpose.VERIFICAT
         data=OTPResponse(
             email=req.email,
             message="New OTP sent",
-            dev_otp=otp.code if settings.DEBUG else None,
+            dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
 
