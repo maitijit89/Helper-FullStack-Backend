@@ -165,7 +165,16 @@ class GoogleSheetsService:
                     sheet.append_row(row_values)
 
         except Exception as err:
-            logger.error("Error syncing to Google Sheet via gspread: %s", err)
+            if "403" in str(err):
+                logger.error(
+                    "Error syncing to Google Sheet via gspread: API permission error (403). "
+                    "Ensure service account email '%s' has 'Editor' permission on Google Sheet ID '%s'. Details: %s",
+                    info.get("client_email") if "info" in locals() and isinstance(info, dict) else "service account",
+                    settings.GOOGLE_SHEETS_SPREADSHEET_ID,
+                    err,
+                )
+            else:
+                logger.error("Error syncing to Google Sheet via gspread: %s", err)
 
     async def _sync_webhook(self, action: str, target: str, row_data: Dict[str, Any]):
         """Sync with Google Sheets via Webhook (e.g. Google Apps Script)."""
