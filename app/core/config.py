@@ -87,6 +87,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
     AUTH_RATE_LIMIT_PER_MINUTE: int = 10
 
+    # Keep-Alive / Self Ping Configuration (Render / Server Wake Up)
+    ENABLE_KEEP_ALIVE: bool = True
+    KEEP_ALIVE_INTERVAL_SECONDS: int = 120  # 2 minutes
+    SERVER_URL: str = ""  # Optional explicit base URL (defaults to RENDER_EXTERNAL_URL or localhost)
+
 
     model_config = SettingsConfigDict(
         env_file=".env",

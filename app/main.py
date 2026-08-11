@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.database import close_db, ensure_db_initialized, init_db
 from app.core.exceptions import setup_exception_handlers
 from app.core.middleware import setup_middlewares
+from app.services.keep_alive import start_keep_alive_task, stop_keep_alive_task
 from app.models import (
     OTP,
     Cart,
@@ -69,10 +70,17 @@ async def lifespan(app: FastAPI):
     except OSError as err:
         logger.warning("Could not create uploads directory (read-only filesystem on serverless): %s", err)
 
+    # Start background keep-alive task (self-ping every 2 min for Render server wake up)
+    start_keep_alive_task()
+
     yield
+
+    # Stop background keep-alive task on app shutdown
+    stop_keep_alive_task()
 
     logger.info("Closing MongoDB connection...")
     await close_db()
+
 
 
 def create_application() -> FastAPI:
@@ -83,7 +91,7 @@ def create_application() -> FastAPI:
         description=(
             "Production-ready FastAPI backend for Customer Ordering, Delivery Partner Lifecycle, "
             "OTP Authentication, MongoDB (Beanie ODM), AWS S3 Cloud Storage, and Upstash Redis. "
-            "Pre-configured for Vercel Serverless Function deployment."
+            "Pre-configured for Render deployment."
         ),
         contact={
             "name": "Helping Services Team",
