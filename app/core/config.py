@@ -105,7 +105,11 @@ settings = Settings()
 
 if settings.ENVIRONMENT.lower() == "production":
     if settings.DEBUG:
-        logger.warning("SECURITY WARNING: DEBUG is enabled in PRODUCTION environment!")
-    if "supersecretkey" in settings.SECRET_KEY.lower():
-        logger.warning("SECURITY WARNING: Default SECRET_KEY is being used in PRODUCTION environment!")
+        logger.warning("SECURITY WARNING: DEBUG is enabled in PRODUCTION environment! Set DEBUG=False.")
+    if "supersecretkey" in settings.SECRET_KEY.lower() or len(settings.SECRET_KEY) < 32:
+        logger.error(
+            "CRITICAL SECURITY RISK: Default or short SECRET_KEY is being used in PRODUCTION environment! "
+            "Generate a strong 64-character hex key using `openssl rand -hex 32` and set it in your environment variables."
+        )
+
 
