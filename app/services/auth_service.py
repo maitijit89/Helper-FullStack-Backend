@@ -19,7 +19,7 @@ from app.services.google_sheets_service import google_sheets_service
 class AuthService:
     async def register_customer(
         self, user_in: CustomerUserCreate
-    ) -> tuple[User, OTP]:
+    ) -> tuple[User, OTP, bool]:
         """Register a new customer with mandatory profile details and generate an email verification OTP."""
         existing_user = await user_crud.get_by_email(email=user_in.email)
         if existing_user:
@@ -33,10 +33,10 @@ class AuthService:
         except Exception as e:
             pass
 
-        otp = await otp_service.create_otp(
+        otp, email_sent = await otp_service.create_otp(
             email=user.email, purpose=OTPPurpose.VERIFICATION
         )
-        return user, otp
+        return user, otp, email_sent
 
     async def verify_registration_otp(self, email: str, code: str) -> Token:
         """Verify registration OTP, mark user email as verified, and issue JWT tokens."""
@@ -60,7 +60,7 @@ class AuthService:
         return Token(access_token=access_token, refresh_token=refresh_token)
 
 
-    async def request_admin_otp(self, email: str) -> OTP:
+    async def request_admin_otp(self, email: str) -> tuple[OTP, bool]:
         """Request Admin OTP for designated admin email."""
         if email.lower().strip() != settings.ADMIN_EMAIL.lower().strip():
             raise BadRequestException(
@@ -91,7 +91,7 @@ class AuthService:
         refresh_token = create_refresh_token(subject=str(admin.id), role=UserRole.ADMIN)
         return Token(access_token=access_token, refresh_token=refresh_token)
 
-    async def request_login_otp(self, email: str) -> OTP:
+    async def request_login_otp(self, email: str) -> tuple[OTP, bool]:
         """Generate a login OTP for a registered user."""
         user = await user_crud.get_by_email(email=email)
         if not user:
@@ -122,7 +122,7 @@ class AuthService:
         refresh_token = create_refresh_token(subject=str(user.id), role=user.role)
         return Token(access_token=access_token, refresh_token=refresh_token)
 
-    async def resend_otp(self, email: str, purpose: OTPPurpose) -> OTP:
+    async def resend_otp(self, email: str, purpose: OTPPurpose) -> tuple[OTP, bool]:
         """Resend a new OTP for verification or login."""
         user = await user_crud.get_by_email(email=email)
         if not user:

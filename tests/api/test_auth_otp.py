@@ -80,3 +80,51 @@ async def test_invalid_otp_fails(client: AsyncClient, test_user):
     assert verify_res.status_code == 400
     data = verify_res.json()
     assert data["success"] is False
+    assert "Invalid OTP code" in data["error"]["message"]
+
+
+@pytest.mark.asyncio
+async def test_resend_otp_and_already_used_otp(client: AsyncClient, test_user):
+    # Step 1: Request OTP
+    req_res = await client.post(
+        "/api/v1/auth/login/request-otp",
+        json={"email": "testuser@example.com"},
+    )
+    assert req_res.status_code == 200
+    req_data = req_res.json()
+    assert "email_sent" in req_data["data"]
+    old_otp = req_data["data"]["dev_otp"]
+
+    # Step 2: Resend OTP for login purpose
+    resend_res = await client.post(
+        "/api/v1/auth/resend-otp?purpose=login",
+        json={"email": "testuser@example.com"},
+    )
+    assert resend_res.status_code == 200
+    resend_data = resend_res.json()
+    new_otp = resend_data["data"]["dev_otp"]
+    assert new_otp is not None
+    assert new_otp != old_otp
+
+    # Step 3: Verifying with old OTP should fail
+    verify_old = await client.post(
+        "/api/v1/auth/login/verify-otp",
+        json={"email": "testuser@example.com", "otp": old_otp},
+    )
+    assert verify_old.status_code == 400
+
+    # Step 4: Verifying with new OTP should succeed
+    verify_new = await client.post(
+        "/api/v1/auth/login/verify-otp",
+        json={"email": "testuser@example.com", "otp": new_otp},
+    )
+    assert verify_new.status_code == 200
+
+    # Step 5: Trying to reuse new OTP should fail with "already been used"
+    verify_reuse = await client.post(
+        "/api/v1/auth/login/verify-otp",
+        json={"email": "testuser@example.com", "otp": new_otp},
+    )
+    assert verify_reuse.status_code == 400
+    assert "already been used" in verify_reuse.json()["error"]["message"]
+

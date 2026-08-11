@@ -20,5 +20,6 @@ class OTPVerifyRequest(BaseModel):
 class OTPResponse(BaseModel):
     email: str
     message: str
+    email_sent: bool = True
     # In development / test environment, output OTP for testing convenience
     dev_otp: Optional[str] = None

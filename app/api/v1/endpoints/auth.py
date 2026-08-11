@@ -31,13 +31,19 @@ router = APIRouter()
 )
 async def signup_customer_user(user_in: CustomerUserCreate) -> Any:
     """Register a new customer with Name, DOB, Gender, Email, Phone, College, and Address. Generates email verification OTP."""
-    user, otp = await auth_service.register_customer(user_in=user_in)
+    user, otp, email_sent = await auth_service.register_customer(user_in=user_in)
+    msg = (
+        "Registration successful. Verification OTP sent to your email."
+        if email_sent
+        else "Registration successful. OTP generated, but email delivery failed. Please try resending."
+    )
     return APIResponse(
         success=True,
-        message="Registration successful. Verification OTP sent to your email.",
+        message=msg,
         data=OTPResponse(
             email=user.email,
-            message="Verification OTP sent",
+            message=msg,
+            email_sent=email_sent,
             dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
@@ -59,13 +65,19 @@ async def verify_registration_otp(req: OTPVerifyRequest) -> Any:
 @router.post("/admin/request-otp", response_model=APIResponse[OTPResponse])
 async def request_admin_otp(req: OTPRequest) -> Any:
     """Request Admin login OTP (Restricted exclusively to helpingservicesteam@gmail.com)."""
-    otp = await auth_service.request_admin_otp(email=req.email)
+    otp, email_sent = await auth_service.request_admin_otp(email=req.email)
+    msg = (
+        f"Admin login OTP sent to {settings.ADMIN_EMAIL}."
+        if email_sent
+        else f"Admin OTP generated, but email delivery to {settings.ADMIN_EMAIL} failed."
+    )
     return APIResponse(
         success=True,
-        message=f"Admin login OTP sent to {settings.ADMIN_EMAIL}.",
+        message=msg,
         data=OTPResponse(
             email=req.email,
-            message="Admin OTP sent",
+            message=msg,
+            email_sent=email_sent,
             dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
@@ -87,13 +99,19 @@ async def verify_admin_otp(req: OTPVerifyRequest) -> Any:
 @router.post("/login/request-otp", response_model=APIResponse[OTPResponse])
 async def request_login_otp(req: OTPRequest) -> Any:
     """Request a 6-digit login OTP for passwordless login into the app."""
-    otp = await auth_service.request_login_otp(email=req.email)
+    otp, email_sent = await auth_service.request_login_otp(email=req.email)
+    msg = (
+        "Login OTP sent to your registered email."
+        if email_sent
+        else "Login OTP generated, but email delivery failed. Please try resending."
+    )
     return APIResponse(
         success=True,
-        message="Login OTP sent to your registered email.",
+        message=msg,
         data=OTPResponse(
             email=req.email,
-            message="Login OTP sent",
+            message=msg,
+            email_sent=email_sent,
             dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
@@ -115,13 +133,19 @@ async def verify_login_otp(req: OTPVerifyRequest) -> Any:
 @router.post("/resend-otp", response_model=APIResponse[OTPResponse])
 async def resend_otp(req: OTPRequest, purpose: OTPPurpose = OTPPurpose.VERIFICATION) -> Any:
     """Resend a new OTP for email verification or login."""
-    otp = await auth_service.resend_otp(email=req.email, purpose=purpose)
+    otp, email_sent = await auth_service.resend_otp(email=req.email, purpose=purpose)
+    msg = (
+        "A new OTP code has been sent to your email."
+        if email_sent
+        else "A new OTP code was generated, but email delivery failed. Please check your email or try again."
+    )
     return APIResponse(
         success=True,
-        message="A new OTP code has been sent.",
+        message=msg,
         data=OTPResponse(
             email=req.email,
-            message="New OTP sent",
+            message=msg,
+            email_sent=email_sent,
             dev_otp=otp.code if (settings.DEBUG or settings.ENVIRONMENT == "testing") else None,
         ),
     )
