@@ -122,13 +122,16 @@ class GoogleSheetsService:
                 "https://www.googleapis.com/auth/drive",
             ]
 
+            sa_email = "service account"
             client = None
             if settings.GOOGLE_SERVICE_ACCOUNT_INFO:
                 info = json.loads(settings.GOOGLE_SERVICE_ACCOUNT_INFO)
                 creds = Credentials.from_service_account_info(info, scopes=scopes)
+                sa_email = getattr(creds, "service_account_email", None) or info.get("client_email", "service account")
                 client = gspread.authorize(creds)
             elif settings.GOOGLE_SERVICE_ACCOUNT_FILE and Path(settings.GOOGLE_SERVICE_ACCOUNT_FILE).exists():
                 creds = Credentials.from_service_account_file(settings.GOOGLE_SERVICE_ACCOUNT_FILE, scopes=scopes)
+                sa_email = getattr(creds, "service_account_email", "service account")
                 client = gspread.authorize(creds)
 
             if not client:
@@ -169,7 +172,7 @@ class GoogleSheetsService:
                 logger.error(
                     "Error syncing to Google Sheet via gspread: API permission error (403). "
                     "Ensure service account email '%s' has 'Editor' permission on Google Sheet ID '%s'. Details: %s",
-                    info.get("client_email") if "info" in locals() and isinstance(info, dict) else "service account",
+                    sa_email,
                     settings.GOOGLE_SHEETS_SPREADSHEET_ID,
                     err,
                 )
@@ -187,7 +190,7 @@ class GoogleSheetsService:
                 "target": target,
                 "data": row_data,
             }
-            async with httpx.AsyncClient(timeout=10.0) as client:
+            async with httpx.AsyncClient(timeout=10.0, follow_redirects=True) as client:
                 resp = await client.post(settings.GOOGLE_SHEET_WEBHOOK_URL, json=payload)
                 if resp.status_code in (200, 201):
                     logger.info("Successfully synced %s data to Google Sheet Webhook for user: %s", target, row_data.get("User ID"))
