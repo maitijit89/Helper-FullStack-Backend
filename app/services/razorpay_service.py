@@ -14,10 +14,19 @@ class RazorpayService:
     """Service wrapper for Razorpay Payment Gateway integration."""
 
     def __init__(self) -> None:
-        self.key_id = settings.RAZORPAY_KEY_ID
-        self.key_secret = settings.RAZORPAY_KEY_SECRET
-        self.webhook_secret = settings.RAZORPAY_WEBHOOK_SECRET
         self._client: Optional[razorpay.Client] = None
+
+    @property
+    def key_id(self) -> str:
+        return settings.RAZORPAY_KEY_ID
+
+    @property
+    def key_secret(self) -> str:
+        return settings.RAZORPAY_KEY_SECRET
+
+    @property
+    def webhook_secret(self) -> str:
+        return settings.RAZORPAY_WEBHOOK_SECRET
 
     @property
     def client(self) -> razorpay.Client:

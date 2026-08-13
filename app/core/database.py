@@ -21,6 +21,8 @@ async def init_db(models: list):
     motor_client = AsyncIOMotorClient(
         settings.MONGODB_URL,
         serverSelectionTimeoutMS=5000,
+        maxPoolSize=100,
+        minPoolSize=10,
     )
     database = motor_client[settings.MONGODB_DB_NAME]
 

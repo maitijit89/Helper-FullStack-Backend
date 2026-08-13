@@ -6,6 +6,7 @@ from fastapi.security import OAuth2PasswordBearer
 from pydantic import ValidationError
 from app.core.config import settings
 from app.core.exceptions import ForbiddenException, UnauthorizedException
+from app.core.security import is_token_blacklisted
 from app.crud import user_crud
 from app.models.user import User
 from app.schemas.partner import PartnerVerificationStatus
@@ -28,6 +29,10 @@ async def get_current_user(token: str = Depends(reusable_oauth2)) -> User:
         token_data = TokenPayload(**payload)
         if token_data.type != "access":
             raise UnauthorizedException("Invalid token type")
+            
+        if await is_token_blacklisted(token):
+            raise UnauthorizedException("Token has been revoked/logged out")
+
     except (jwt.PyJWTError, ValidationError) as err:
         raise UnauthorizedException(f"Could not validate credentials: {err}")
 
@@ -62,6 +67,10 @@ async def get_optional_current_user(
         token_data = TokenPayload(**payload)
         if token_data.type != "access" or not token_data.sub:
             return None
+        
+        if await is_token_blacklisted(token):
+            return None
+            
         user = await user_crud.get_by_id(user_id=token_data.sub)
         return user if user and user.is_active else None
     except Exception:

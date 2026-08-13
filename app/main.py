@@ -46,9 +46,19 @@ ALL_MODELS = [
 
 
 
+from pythonjsonlogger import jsonlogger
+
+log_handler = logging.StreamHandler()
+if not settings.DEBUG:
+    formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+    log_handler.setFormatter(formatter)
+else:
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    log_handler.setFormatter(formatter)
+
 logging.basicConfig(
     level=logging.INFO if not settings.DEBUG else logging.DEBUG,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[log_handler]
 )
 logger = logging.getLogger(__name__)
 

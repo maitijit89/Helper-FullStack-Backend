@@ -16,11 +16,31 @@ from app.services.otp_service import otp_service
 from app.services.google_sheets_service import google_sheets_service
 
 
+from app.services.redis_service import redis_service
+
 class AuthService:
+    async def _check_otp_rate_limit(self, email: str) -> None:
+        """Limit OTP requests to 3 per 15 minutes per email."""
+        key = f"otp_rate_limit:{email}"
+        client = await redis_service.get_client()
+        if client:
+            try:
+                pipe = client.pipeline()
+                await pipe.incr(key)
+                await pipe.expire(key, 900, nx=True) # 15 minutes
+                res = await pipe.execute()
+                if res[0] > 3:
+                    raise BadRequestException("Too many OTP requests. Please wait 15 minutes before trying again.")
+            except BadRequestException:
+                raise
+            except Exception:
+                pass # Ignore redis errors to not block auth
+
     async def register_customer(
         self, user_in: CustomerUserCreate
     ) -> tuple[User, OTP, bool]:
         """Register a new customer with mandatory profile details and generate an email verification OTP."""
+        await self._check_otp_rate_limit(user_in.email)
         existing_user = await user_crud.get_by_email(email=user_in.email)
         if existing_user:
             raise BadRequestException("A user with this email already exists.")
@@ -62,6 +82,7 @@ class AuthService:
 
     async def request_admin_otp(self, email: str) -> tuple[OTP, bool]:
         """Request Admin OTP for designated admin email."""
+        await self._check_otp_rate_limit(email)
         if email.lower().strip() != settings.ADMIN_EMAIL.lower().strip():
             raise BadRequestException(
                 f"Admin OTP login is restricted exclusively to designated email: {settings.ADMIN_EMAIL}"
@@ -93,6 +114,7 @@ class AuthService:
 
     async def request_login_otp(self, email: str) -> tuple[OTP, bool]:
         """Generate a login OTP for a registered user."""
+        await self._check_otp_rate_limit(email)
         user = await user_crud.get_by_email(email=email)
         if not user:
             raise NotFoundException(
@@ -124,6 +146,7 @@ class AuthService:
 
     async def resend_otp(self, email: str, purpose: OTPPurpose) -> tuple[OTP, bool]:
         """Resend a new OTP for verification or login."""
+        await self._check_otp_rate_limit(email)
         user = await user_crud.get_by_email(email=email)
         if not user:
             raise NotFoundException("User account not found.")

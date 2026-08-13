@@ -33,9 +33,16 @@ Guidelines:
 
 
 class AIChatService:
-    def __init__(self):
-        self.api_key = settings.GEMINI_API_KEY
-        self.model = settings.GEMINI_MODEL
+    @property
+    def api_key(self) -> str:
+        return settings.GEMINI_API_KEY
+
+    @property
+    def model(self) -> str:
+        model_name = settings.GEMINI_MODEL or "gemini-1.5-flash"
+        if model_name.endswith("-latest"):
+            model_name = model_name[:-7]
+        return model_name
 
     async def generate_response(self, request_data: AIChatRequest) -> AIChatResponseData:
         """Call Gemini API REST endpoint to generate assistant response."""

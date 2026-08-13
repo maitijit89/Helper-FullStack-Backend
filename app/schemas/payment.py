@@ -5,8 +5,14 @@ from pydantic import BaseModel, Field
 class RazorpayOrderCreateRequest(BaseModel):
     """Payload to initiate a Razorpay payment for a system order."""
 
-    order_id: str = Field(..., description="Backend system Order ID")
+    order_id: Optional[str] = Field(default=None, description="Backend system Order ID")
+    system_order_id: Optional[str] = Field(default=None, description="Backend system Order ID alternative key")
+    orderId: Optional[str] = Field(default=None, description="CamelCase Order ID")
     notes: Optional[Dict[str, Any]] = Field(default=None, description="Optional custom metadata for Razorpay order")
+
+    @property
+    def get_order_id(self) -> str:
+        return self.order_id or self.system_order_id or self.orderId or ""
 
 
 class RazorpayOrderResponse(BaseModel):
@@ -23,10 +29,16 @@ class RazorpayOrderResponse(BaseModel):
 class RazorpayVerifyRequest(BaseModel):
     """Payload submitted by frontend checkout after payment completion for HMAC signature verification."""
 
-    order_id: str = Field(..., description="Backend system Order ID")
+    order_id: Optional[str] = Field(default=None, description="Backend system Order ID")
+    system_order_id: Optional[str] = Field(default=None, description="Backend system Order ID alternative key")
+    orderId: Optional[str] = Field(default=None, description="CamelCase Order ID")
     razorpay_order_id: str = Field(..., description="Razorpay Order ID")
     razorpay_payment_id: str = Field(..., description="Razorpay Payment ID (pay_...)")
     razorpay_signature: str = Field(..., description="HMAC SHA256 Signature from Razorpay")
+
+    @property
+    def get_order_id(self) -> str:
+        return self.order_id or self.system_order_id or self.orderId or ""
 
 
 class RazorpayVerifyResponse(BaseModel):

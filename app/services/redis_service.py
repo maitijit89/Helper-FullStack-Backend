@@ -24,6 +24,7 @@ class RedisService:
                     settings.REDIS_URL,
                     encoding="utf-8",
                     decode_responses=True,
+                    max_connections=100,
                 )
                 logger.info("Connected to Redis instance successfully.")
             except Exception as e:

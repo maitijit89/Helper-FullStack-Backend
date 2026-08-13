@@ -2,10 +2,10 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 import jwt
-from app.api.deps import get_current_active_user
+from app.api.deps import get_current_active_user, reusable_oauth2
 from app.core.config import settings
 from app.core.exceptions import BadRequestException, UnauthorizedException
-from app.core.security import create_access_token, create_refresh_token
+from app.core.security import blacklist_token, create_access_token, create_refresh_token
 from app.models.user import User
 from app.schemas.auth_otp import (
     OTPPurpose,
@@ -154,8 +154,19 @@ async def resend_otp(req: OTPRequest, purpose: OTPPurpose = OTPPurpose.VERIFICAT
 @router.post("/logout", response_model=APIResponse[dict])
 async def logout(
     current_user: User = Depends(get_current_active_user),
+    token: str = Depends(reusable_oauth2),
 ) -> Any:
-    """Logout current user session."""
+    """Logout current user session and invalidate token."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        exp = payload.get("exp")
+        import time
+        now = int(time.time())
+        expires_in = max(exp - now, 0) if exp else settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60
+        await blacklist_token(token, expires_in)
+    except Exception:
+        pass # Ignore decode errors if it's somehow invalid already
+        
     return APIResponse(
         success=True,
         message="Logout successful.",

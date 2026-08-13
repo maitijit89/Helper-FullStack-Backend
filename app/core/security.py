@@ -4,6 +4,19 @@ import bcrypt
 import jwt
 from app.core.config import settings
 from app.schemas.role import UserRole
+from app.services.redis_service import redis_service
+
+
+async def blacklist_token(token: str, expires_in: int) -> None:
+    """Add a JWT token to the Redis blacklist with a TTL."""
+    # Ensure expires_in is positive to avoid Redis errors
+    if expires_in > 0:
+        await redis_service.set(f"blacklist:{token}", "true", expire_seconds=expires_in)
+
+
+async def is_token_blacklisted(token: str) -> bool:
+    """Check if a JWT token is in the Redis blacklist."""
+    return await redis_service.get(f"blacklist:{token}") is not None
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

@@ -36,18 +36,18 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         if not settings.DEBUG:
             response.headers["Strict-Transport-Security"] = (
-                "max-age=31536000; includeSubDomains"
+                "max-age=31536000; includeSubDomains; preload"
             )
         return response
 
 
-from collections import defaultdict
 from fastapi.responses import JSONResponse
 from starlette.status import HTTP_429_TOO_MANY_REQUESTS
-
-_request_timestamps = defaultdict(list)
+from app.services.redis_service import redis_service
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -66,8 +66,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         client_ip = request.client.host if request.client else "127.0.0.1"
-        now = time.time()
-        window = 60.0
         is_auth = "/auth/" in path
         max_requests = (
             settings.AUTH_RATE_LIMIT_PER_MINUTE
@@ -75,23 +73,34 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             else settings.RATE_LIMIT_PER_MINUTE
         )
 
-        key = f"{client_ip}:{'auth' if is_auth else 'general'}"
-        timestamps = [t for t in _request_timestamps[key] if now - t < window]
-        _request_timestamps[key] = timestamps
-
-        if len(timestamps) >= max_requests:
-            return JSONResponse(
-                status_code=HTTP_429_TOO_MANY_REQUESTS,
-                content={
-                    "success": False,
-                    "error": {
-                        "code": HTTP_429_TOO_MANY_REQUESTS,
-                        "message": "Too many requests. Please slow down and try again later.",
-                    },
-                },
-            )
-
-        _request_timestamps[key].append(now)
+        key = f"rate_limit:{client_ip}:{'auth' if is_auth else 'general'}"
+        
+        client = await redis_service.get_client()
+        if client:
+            try:
+                # Use Redis pipeline for atomic operations
+                pipe = client.pipeline()
+                await pipe.incr(key)
+                await pipe.expire(key, 60, nx=True) # Set expire only if key has no expire
+                res = await pipe.execute()
+                current_requests = res[0]
+                
+                if current_requests > max_requests:
+                    return JSONResponse(
+                        status_code=HTTP_429_TOO_MANY_REQUESTS,
+                        content={
+                            "success": False,
+                            "error": {
+                                "code": HTTP_429_TOO_MANY_REQUESTS,
+                                "message": "Too many requests. Please slow down and try again later.",
+                            },
+                        },
+                    )
+            except Exception as e:
+                # Fallback on Redis failure to not block requests, or we could fallback to memory
+                import logging
+                logging.getLogger(__name__).error("Redis rate limit failed: %s", e)
+                
         return await call_next(request)
 
 

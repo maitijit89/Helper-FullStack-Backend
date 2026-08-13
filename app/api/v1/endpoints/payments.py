@@ -34,9 +34,13 @@ async def create_razorpay_order(
     Creates a Razorpay Order for an existing system order.
     Returns parameters (order_id, amount, key_id) required to launch Razorpay Checkout on frontend.
     """
-    order = await order_crud.get_by_id(req.order_id)
+    target_order_id = req.get_order_id
+    if not target_order_id:
+        raise BadRequestException("Order ID ('order_id', 'system_order_id', or 'orderId') is required.")
+
+    order = await order_crud.get_by_id(target_order_id)
     if not order:
-        raise NotFoundException(f"Order '{req.order_id}' not found.")
+        raise NotFoundException(f"Order '{target_order_id}' not found.")
 
     user_id_str = str(current_user.id)
     if order.customer_id != user_id_str and not current_user.is_superuser:
@@ -93,9 +97,13 @@ async def verify_razorpay_payment(
     Verifies Razorpay payment signature upon Checkout completion.
     Updates system order payment status to PAID upon successful signature validation.
     """
-    order = await order_crud.get_by_id(req.order_id)
+    target_order_id = req.get_order_id
+    if not target_order_id:
+        raise BadRequestException("Order ID ('order_id', 'system_order_id', or 'orderId') is required.")
+
+    order = await order_crud.get_by_id(target_order_id)
     if not order:
-        raise NotFoundException(f"Order '{req.order_id}' not found.")
+        raise NotFoundException(f"Order '{target_order_id}' not found.")
 
     user_id_str = str(current_user.id)
     if order.customer_id != user_id_str and not current_user.is_superuser:
