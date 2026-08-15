@@ -20,13 +20,25 @@ class RazorpayService:
     def key_id(self) -> str:
         return settings.RAZORPAY_KEY_ID
 
+    @key_id.setter
+    def key_id(self, value: str) -> None:
+        settings.RAZORPAY_KEY_ID = value
+
     @property
     def key_secret(self) -> str:
         return settings.RAZORPAY_KEY_SECRET
 
+    @key_secret.setter
+    def key_secret(self, value: str) -> None:
+        settings.RAZORPAY_KEY_SECRET = value
+
     @property
     def webhook_secret(self) -> str:
         return settings.RAZORPAY_WEBHOOK_SECRET
+
+    @webhook_secret.setter
+    def webhook_secret(self, value: str) -> None:
+        settings.RAZORPAY_WEBHOOK_SECRET = value
 
     @property
     def client(self) -> razorpay.Client:

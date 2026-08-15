@@ -123,9 +123,15 @@ async def verify_razorpay_payment(
     order.payment_status = PaymentStatus.PAID
     order.razorpay_order_id = req.razorpay_order_id
     order.razorpay_payment_id = req.razorpay_payment_id
-    order.razorpay_signature = req.razorpay_signature
     order.touch()
     await order.save()
+
+    # Ring nearby delivery partners if not already alerted
+    if not order.notified_partner_ids and order.delivery_location:
+        try:
+            await order_crud._ring_nearby_partners_if_location_available(order)
+        except Exception as ring_err:
+            logger.warning(f"Failed to ring partners after payment verification: {ring_err}")
 
     logger.info(f"Payment successful & verified for order {order.order_id} via payment ID {req.razorpay_payment_id}")
 
@@ -183,5 +189,11 @@ async def razorpay_webhook(
                 order.touch()
                 await order.save()
                 logger.info(f"Webhook updated order {order.order_id} to PAID via {event_name}")
+
+                if not order.notified_partner_ids and order.delivery_location:
+                    try:
+                        await order_crud._ring_nearby_partners_if_location_available(order)
+                    except Exception as ring_err:
+                        logger.warning(f"Failed to ring partners after webhook payment capture: {ring_err}")
 
     return {"status": "ok", "event": event_name}
