@@ -11,6 +11,7 @@ from app.main import ALL_MODELS, app
 from app.models import (
     OTP,
     Cart,
+    Feedback,
     Order,
     PartnerWallet,
     Product,
@@ -53,6 +54,7 @@ async def init_test_db():
     await Order.delete_all()
     await Cart.delete_all()
     await Rating.delete_all()
+    await Feedback.delete_all()
     await SupportTicket.delete_all()
     await PartnerWallet.delete_all()
     await WalletTransaction.delete_all()

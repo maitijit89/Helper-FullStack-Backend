@@ -46,7 +46,19 @@ This document serves as the persistent memory log and state repository for the *
   - `GET /api/v1/partner/wallet/earnings-history`: Daily/weekly breakdown of earnings, 48h holding balance maturity status, and completed trip counts.
 - **Test Suite**: `tests/api/test_admin_management_and_refunds.py` (5 tests passing).
 
-### 2.3 Razorpay Payment Gateway Integration
+### 2.3 User & Partner App Feedback System
+- **Models & Schemas**: Created `Feedback` document model ([feedback.py](file:///e:/Helper-FullStack-Backend/app/models/feedback.py)) and Pydantic DTOs ([feedback.py](file:///e:/Helper-FullStack-Backend/app/schemas/feedback.py)). Supports star rating (1-5), categories (`app_experience`, `delivery_service`, `pricing`, `feature_request`, `bug_report`, `support`, `general`), message, and client device telemetry.
+- **Endpoints**:
+  - `POST /api/v1/feedback/`: Customer or Delivery Partner submits app feedback.
+  - `GET /api/v1/feedback/me`: View submitted feedback history and admin replies.
+  - `GET /api/v1/feedback/{feedback_id}`: View single feedback item.
+  - `GET /api/v1/feedback/admin/all`: Admin query with multi-field filters (`role`, `category`, `status`, `min_rating`, `max_rating`, pagination).
+  - `GET /api/v1/feedback/admin/summary`: Real-time feedback analytics dashboard (average ratings, customer vs partner satisfaction score, category breakdown, star distribution).
+  - `PATCH /api/v1/feedback/admin/{feedback_id}`: Triage status (`NEW`, `IN_REVIEW`, `RESOLVED`, `ARCHIVED`), add notes, and reply.
+  - `DELETE /api/v1/feedback/admin/{feedback_id}`: Delete feedback.
+- **Test Suite**: `tests/api/test_feedback.py` (4 tests passing).
+
+### 2.4 Razorpay Payment Gateway Integration
 - **Credentials Configured**: Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env` and `app/core/config.py`.
 - **Endpoints**: `POST /payments/razorpay/create-order`, `POST /payments/razorpay/verify`, `POST /payments/razorpay/webhook`, `POST /payments/razorpay/refund`.
 - **Test Suite**: `tests/api/test_payments.py` (passing).

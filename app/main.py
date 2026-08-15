@@ -23,6 +23,7 @@ from app.services.keep_alive import start_keep_alive_task, stop_keep_alive_task
 from app.models import (
     OTP,
     Cart,
+    Feedback,
     Order,
     PartnerWallet,
     Product,
@@ -40,6 +41,7 @@ ALL_MODELS = [
     Order,
     Cart,
     Rating,
+    Feedback,
     SupportTicket,
     PartnerWallet,
     WalletTransaction,

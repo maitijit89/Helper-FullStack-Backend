@@ -1,4 +1,5 @@
 from app.models.cart import Cart, CartItem
+from app.models.feedback import Feedback, FeedbackCategory, FeedbackStatus
 from app.models.order import Order, OrderStatus, OrderType, PaymentMethod, PaymentStatus
 from app.models.otp import OTP
 from app.models.product import Product, ProductCategory
@@ -21,6 +22,9 @@ __all__ = [
     "Cart",
     "CartItem",
     "Rating",
+    "Feedback",
+    "FeedbackStatus",
+    "FeedbackCategory",
     "SupportTicket",
     "SupportTicketStatus",
     "PartnerWallet",
