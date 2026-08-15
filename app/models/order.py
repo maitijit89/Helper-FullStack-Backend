@@ -124,6 +124,11 @@ class Order(Document):
     delivery_fee: float = Field(0.0, ge=0.0)
     total_amount: float = Field(0.0, ge=0.0)
 
+    # Customer Rating & Review details
+    is_rated: bool = Field(False, description="Whether customer has rated this order")
+    rating: Optional[float] = Field(None, ge=1.0, le=5.0, description="Customer star rating (1.0 - 5.0)")
+    review: Optional[str] = Field(None, description="Customer feedback review text")
+
     created_at: datetime = Field(
         default_factory=lambda: datetime.now(timezone.utc)
     )

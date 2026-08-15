@@ -2,6 +2,7 @@ from app.models.cart import Cart, CartItem
 from app.models.order import Order, OrderStatus, OrderType, PaymentMethod, PaymentStatus
 from app.models.otp import OTP
 from app.models.product import Product, ProductCategory
+from app.models.rating import Rating
 from app.models.support_ticket import SupportTicket, SupportTicketStatus
 from app.models.user import User
 from app.models.wallet import PartnerWallet, TransactionType, WalletTransaction
@@ -19,6 +20,7 @@ __all__ = [
     "PaymentStatus",
     "Cart",
     "CartItem",
+    "Rating",
     "SupportTicket",
     "SupportTicketStatus",
     "PartnerWallet",
@@ -28,6 +30,3 @@ __all__ = [
     "PayoutMethod",
     "WithdrawalStatus",
 ]
-
-
-

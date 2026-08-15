@@ -55,3 +55,24 @@ class RazorpayWebhookEvent(BaseModel):
 
     event: str
     payload: Dict[str, Any]
+
+
+class RazorpayRefundRequest(BaseModel):
+    """Payload to initiate a refund for an order paid via Razorpay."""
+
+    order_id: str = Field(..., description="System Order ID to refund")
+    amount: Optional[float] = Field(None, ge=1.0, description="Optional partial refund amount in rupees. If omitted, full refund is issued.")
+    reason: Optional[str] = Field(None, description="Reason for refund")
+
+
+class RazorpayRefundResponse(BaseModel):
+    """Response returned upon refund execution."""
+
+    success: bool
+    order_id: str
+    refund_id: str
+    payment_id: str
+    amount_refunded: float
+    message: str
+    currency: str = "INR"
+

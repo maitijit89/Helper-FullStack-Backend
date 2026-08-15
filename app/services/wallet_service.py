@@ -234,5 +234,52 @@ class WalletService:
 
         return request
 
+    async def get_partner_earnings_analytics(self, partner_id: str) -> dict:
+        """
+        Calculates detailed earnings statistics, 48h holding amount, and daily/weekly earnings breakdown.
+        """
+        wallet_summary = await self.get_partner_wallet_summary(partner_id)
+        all_earnings = await WalletTransaction.find(
+            WalletTransaction.partner_id == partner_id,
+            WalletTransaction.transaction_type == TransactionType.EARNING,
+        ).sort("-created_at").to_list()
+
+        now = datetime.now(timezone.utc)
+        cutoff_48h = now - timedelta(hours=48)
+
+        holding_earnings = [
+            t for t in all_earnings
+            if (t.created_at.tzinfo is None and t.created_at > cutoff_48h.replace(tzinfo=None))
+            or (t.created_at.tzinfo is not None and t.created_at > cutoff_48h)
+        ]
+        holding_amount = sum(t.amount for t in holding_earnings)
+
+        # Build daily breakdown for the past 7 days
+        daily_breakdown = {}
+        for i in range(7):
+            d = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+            daily_breakdown[d] = {"date": d, "earnings": 0.0, "trips_count": 0}
+
+        for tx in all_earnings:
+            tx_date = tx.created_at.strftime("%Y-%m-%d")
+            if tx_date in daily_breakdown:
+                daily_breakdown[tx_date]["earnings"] = round(
+                    daily_breakdown[tx_date]["earnings"] + tx.amount, 2
+                )
+                daily_breakdown[tx_date]["trips_count"] += 1
+
+        daily_list = sorted(list(daily_breakdown.values()), key=lambda x: x["date"], reverse=True)
+
+        return {
+            "partner_id": partner_id,
+            "total_balance": wallet_summary.total_balance,
+            "withdrawable_balance": wallet_summary.withdrawable_balance,
+            "holding_balance": round(holding_amount, 2),
+            "total_withdrawn": wallet_summary.total_withdrawn,
+            "total_completed_trips": len(all_earnings),
+            "daily_history": daily_list,
+        }
+
 
 wallet_service = WalletService()
+

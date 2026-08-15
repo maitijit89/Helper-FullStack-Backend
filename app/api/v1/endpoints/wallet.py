@@ -103,6 +103,19 @@ async def get_partner_withdrawals(
     )
 
 
+@router.get("/partner/wallet/earnings-history", response_model=APIResponse[dict])
+async def get_partner_earnings_history(
+    current_partner: User = Depends(get_current_partner),
+) -> Any:
+    """Fetch daily earnings breakdown, 48h holding maturity status, and completed delivery stats."""
+    analytics = await wallet_service.get_partner_earnings_analytics(partner_id=str(current_partner.id))
+    return APIResponse(
+        success=True,
+        message="Partner earnings analytics retrieved successfully",
+        data=analytics,
+    )
+
+
 # ==================== ADMIN WITHDRAWAL ENDPOINTS ====================
 
 @router.get("/admin/withdrawals", response_model=APIResponse[List[WithdrawalResponse]])

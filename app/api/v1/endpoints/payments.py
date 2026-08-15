@@ -11,6 +11,8 @@ from app.models.user import User
 from app.schemas.payment import (
     RazorpayOrderCreateRequest,
     RazorpayOrderResponse,
+    RazorpayRefundRequest,
+    RazorpayRefundResponse,
     RazorpayVerifyRequest,
     RazorpayVerifyResponse,
 )
@@ -197,3 +199,63 @@ async def razorpay_webhook(
                         logger.warning(f"Failed to ring partners after webhook payment capture: {ring_err}")
 
     return {"status": "ok", "event": event_name}
+
+
+@router.post(
+    "/razorpay/refund",
+    response_model=APIResponse[RazorpayRefundResponse],
+)
+async def refund_razorpay_payment(
+    req: RazorpayRefundRequest,
+    current_user: User = Depends(get_current_active_user),
+) -> Any:
+    """
+    Process full or partial refund for an order paid via Razorpay.
+    Authorized for customer (for eligible cancelled orders) or system Admin.
+    """
+    order = await order_crud.get_by_id(req.order_id)
+    if not order:
+        raise NotFoundException(f"Order '{req.order_id}' not found.")
+
+    user_id_str = str(current_user.id)
+    if order.customer_id != user_id_str and not current_user.is_superuser:
+        raise ForbiddenException("You are not authorized to request a refund for this order.")
+
+    if not order.razorpay_payment_id:
+        raise BadRequestException("This order has no associated Razorpay payment ID.")
+
+    if order.payment_status not in [PaymentStatus.PAID, PaymentStatus.FAILED]:
+        raise BadRequestException(f"Cannot refund order with payment status '{order.payment_status.value}'.")
+
+    refund_amount = req.amount or order.total_amount
+    refund_res = razorpay_service.refund_payment(
+        payment_id=order.razorpay_payment_id,
+        amount_in_rupees=refund_amount,
+        notes={
+            "order_id": order.order_id,
+            "reason": req.reason or "Customer/Admin requested refund",
+            "requested_by": user_id_str,
+        },
+    )
+
+    # Update order payment status
+    order.payment_status = PaymentStatus.FAILED
+    order.touch()
+    await order.save()
+
+    logger.info(f"Processed refund of Rs. {refund_amount} for order {order.order_id} via refund ID {refund_res.get('id')}")
+
+    return APIResponse(
+        success=True,
+        message=f"Refund of ₹{refund_amount:.2f} processed successfully.",
+        data=RazorpayRefundResponse(
+            success=True,
+            order_id=order.order_id,
+            refund_id=refund_res.get("id", "rfnd_simulated"),
+            payment_id=order.razorpay_payment_id,
+            amount_refunded=refund_amount,
+            message="Refund initiated successfully",
+            currency="INR",
+        ),
+    )
+

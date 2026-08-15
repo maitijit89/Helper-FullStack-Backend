@@ -428,7 +428,60 @@ class CRUDOrder:
 
         return order
 
+    async def get_all_orders(
+        self,
+        status: Optional[OrderStatus] = None,
+        order_type: Optional[OrderType] = None,
+        payment_status: Optional[PaymentStatus] = None,
+        customer_id: Optional[str] = None,
+        partner_id: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[Order]:
+        """Fetch all orders platform-wide with multi-field filtering for Admin."""
+        query = Order.find_all()
+        if status:
+            query = query.find(Order.status == status)
+        if order_type:
+            query = query.find(Order.order_type == order_type)
+        if payment_status:
+            query = query.find(Order.payment_status == payment_status)
+        if customer_id:
+            query = query.find(Order.customer_id == customer_id)
+        if partner_id:
+            query = query.find(Order.partner_id == partner_id)
+
+        return await query.sort("-created_at").skip(skip).limit(limit).to_list()
+
+    async def force_assign_partner(self, order_id: str, partner_id: str) -> Order:
+        """
+        Admin manually forces or reassigns an order to a delivery partner.
+        Updates order status to ASSIGNED if order was PENDING.
+        """
+        order = await self.get_by_id(order_id)
+        if not order:
+            raise NotFoundException("Order not found.")
+
+        from app.crud.crud_user import user_crud
+        from app.schemas.role import UserRole
+
+        partner = await user_crud.get_by_id(partner_id)
+        if not partner:
+            partner = await user_crud.get_by_partner_id(partner_id)
+
+        if not partner or partner.role != UserRole.PARTNER:
+            raise BadRequestException("Target user is not a registered delivery partner.")
+
+        order.partner_id = str(partner.id)
+        if order.status == OrderStatus.PENDING:
+            order.status = OrderStatus.ASSIGNED
+
+        order.touch()
+        await order.save()
+        return order
+
 
 order_crud = CRUDOrder()
+
 
 

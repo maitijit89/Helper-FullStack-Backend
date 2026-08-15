@@ -283,6 +283,8 @@ class CRUDUser:
             "selfie_url",
             "verification_status",
             "rejection_reason",
+            "rating",
+            "total_ratings",
         }
 
         for k, v in update_dict.items():

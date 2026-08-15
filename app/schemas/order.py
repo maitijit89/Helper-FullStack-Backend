@@ -98,6 +98,9 @@ class OrderResponse(BaseModel):
     items_total: float
     delivery_fee: float
     total_amount: float
+    is_rated: bool = False
+    rating: Optional[float] = None
+    review: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

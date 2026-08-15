@@ -357,3 +357,31 @@ async def test_partner_withdrawal_rejection_flow(
     assert w_data["total_balance"] == 200.0
     assert w_data["pending_withdrawal_balance"] == 0.0
     assert w_data["withdrawable_balance"] == 200.0
+
+
+@pytest.mark.asyncio
+async def test_regular_user_cannot_access_partner_wallet(
+    client: AsyncClient,
+    normal_user_token_headers: dict,
+):
+    """Ensure regular customer users are forbidden (403) from partner wallet endpoints."""
+    # 1. Try accessing partner wallet balance
+    res_wallet = await client.get("/api/v1/partner/wallet", headers=normal_user_token_headers)
+    assert res_wallet.status_code == 403
+
+    # 2. Try requesting withdrawal
+    res_withdraw = await client.post(
+        "/api/v1/partner/wallet/withdraw",
+        json={"amount": 50.0, "payout_method": "upi", "upi_id": "test@upi"},
+        headers=normal_user_token_headers,
+    )
+    assert res_withdraw.status_code == 403
+
+    # 3. Try viewing withdrawals list
+    res_list = await client.get("/api/v1/partner/wallet/withdrawals", headers=normal_user_token_headers)
+    assert res_list.status_code == 403
+
+    # 4. Try viewing earnings history
+    res_history = await client.get("/api/v1/partner/wallet/earnings-history", headers=normal_user_token_headers)
+    assert res_history.status_code == 403
+

@@ -43,6 +43,9 @@ class PartnerProfile(BaseModel):
     payment_method: str = "upi"
     upi_transaction_id: Optional[str] = None
     payment_timestamp: Optional[datetime] = None
+    rating: float = Field(5.0, ge=1.0, le=5.0, description="Average rating score")
+    total_ratings: int = Field(0, ge=0, description="Total ratings count")
+    rating_sum: float = Field(0.0, ge=0.0, description="Sum of all ratings received")
 
 
 class PartnerCreate(BaseModel):
@@ -109,4 +112,6 @@ class AdminPartnerUpdate(BaseModel):
     selfie_url: Optional[str] = None
     verification_status: Optional[PartnerVerificationStatus] = None
     rejection_reason: Optional[str] = None
+    rating: Optional[float] = Field(None, ge=1.0, le=5.0, description="Admin override rating score")
+    total_ratings: Optional[int] = Field(None, ge=0, description="Admin override total ratings count")
 

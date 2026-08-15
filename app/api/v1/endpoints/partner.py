@@ -130,3 +130,39 @@ async def get_ringing_orders(
         data=ringing,
     )
 
+
+@router.get("/ratings", response_model=APIResponse[list])
+async def get_my_partner_ratings(
+    skip: int = 0,
+    limit: int = 50,
+    current_partner: User = Depends(get_current_partner),
+) -> Any:
+    """Get all reviews and ratings received by current delivery partner."""
+    from app.crud.crud_rating import rating_crud
+    from app.schemas.rating import RatingResponse
+
+    ratings = await rating_crud.get_partner_ratings(
+        partner_id=str(current_partner.id), include_hidden=False, skip=skip, limit=limit
+    )
+    return APIResponse(
+        success=True,
+        message="Partner ratings fetched successfully",
+        data=[RatingResponse.model_validate(r) for r in ratings],
+    )
+
+
+@router.get("/ratings/summary", response_model=APIResponse[Any])
+async def get_my_partner_rating_summary(
+    current_partner: User = Depends(get_current_partner),
+) -> Any:
+    """Get comprehensive rating metrics, score breakdown, and recent feedback for partner dashboard."""
+    from app.crud.crud_rating import rating_crud
+
+    summary = await rating_crud.get_partner_rating_summary(partner_id=str(current_partner.id))
+    return APIResponse(
+        success=True,
+        message="Partner rating summary fetched successfully",
+        data=summary,
+    )
+
+

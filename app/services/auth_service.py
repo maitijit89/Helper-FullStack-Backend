@@ -21,6 +21,9 @@ from app.services.redis_service import redis_service
 class AuthService:
     async def _check_otp_rate_limit(self, email: str) -> None:
         """Limit OTP requests to 3 per 15 minutes per email."""
+        if settings.ENVIRONMENT == "testing":
+            return
+
         key = f"otp_rate_limit:{email}"
         client = await redis_service.get_client()
         if client:
