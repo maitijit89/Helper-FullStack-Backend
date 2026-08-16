@@ -4,9 +4,11 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import path from 'path';
+import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
 import { errorHandler } from './middlewares/errorHandler';
 import { standardRateLimiter } from './middlewares/rateLimiter';
+import { swaggerDocument } from './docs/swagger';
 import apiRouter from './routes';
 
 export function createApp(): Express {
@@ -16,6 +18,7 @@ export function createApp(): Express {
   app.use(
     helmet({
       crossOriginResourcePolicy: false,
+      contentSecurityPolicy: false, // Allow Swagger UI inline scripts & assets
     })
   );
 
@@ -34,6 +37,8 @@ export function createApp(): Express {
         return callback(null, true); // Permissive default for ease of local/mobile integration
       },
       credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
     })
   );
 
@@ -57,15 +62,22 @@ export function createApp(): Express {
   // Static files for uploaded assets
   app.use('/static', express.static(path.resolve('uploads')));
 
+  // Swagger Documentation & OpenAPI JSON
+  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  app.use(`${env.API_V1_STR}/docs`, swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  app.get(`${env.API_V1_STR}/openapi.json`, (req: Request, res: Response) => {
+    res.status(200).json(swaggerDocument);
+  });
+
   // Root endpoint
   app.get('/', (req: Request, res: Response) => {
     res.status(200).json({
       name: env.PROJECT_NAME,
       version: env.VERSION,
       environment: env.ENVIRONMENT,
+      docs: '/docs',
       health: `${env.API_V1_STR}/health`,
       database: 'MongoDB (Mongoose ODM)',
-      docs: `${env.API_V1_STR}/health`,
     });
   });
 

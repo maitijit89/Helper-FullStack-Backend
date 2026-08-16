@@ -1,8 +1,8 @@
-import { Router, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, AuthenticatedRequest } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { CreateOrderSchema, RateOrderSchema } from '../schemas/order.schema';
-import { Order, OrderStatus, OrderType } from '../models/Order';
+import { Order, OrderStatus, OrderType, PaymentMethod } from '../models/Order';
 import { Rating } from '../models/Rating';
 import { dispatchEngine } from '../services/dispatch.service';
 import { surgePricingEngine } from '../services/surgePricing.service';
@@ -12,14 +12,52 @@ import { BadRequestException, NotFoundException } from '../middlewares/errorHand
 
 const router = Router();
 
+// Public / Client: Get delivery fee slabs table
+router.get('/delivery-fee-slabs', (req: Request, res: Response) => {
+  const slabs = surgePricingEngine.getAllSlabs();
+  res.status(200).json({
+    success: true,
+    data: slabs,
+  });
+});
+
+// Calculate live delivery fee for any order amount & method (useful for live cart checkout)
+router.post('/calculate-fee', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { items_total = 0, additional_charges = 0, payment_method } = req.body;
+    const feeCalculation = await surgePricingEngine.calculateDeliveryFee(
+      Number(items_total),
+      Number(additional_charges),
+      payment_method
+    );
+
+    res.status(200).json({
+      success: true,
+      data: feeCalculation,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 1. Create order
 router.post('/', authenticate, validate(CreateOrderSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const customerId = req.user!._id.toString();
-    const { order_type, items = [], print_spec, porter_spec, assignment_spec, payment_method, delivery_address, delivery_location, customer_phone } = req.body;
+    const {
+      order_type,
+      items = [],
+      print_spec,
+      porter_spec,
+      assignment_spec,
+      payment_method = PaymentMethod.UPI,
+      delivery_address,
+      delivery_location,
+      customer_phone,
+    } = req.body;
 
     let itemsTotal = 0.0;
-    let baseDeliveryFee = 25.0;
+    let additionalCharges = 0.0;
 
     if (order_type === OrderType.PRODUCT_ORDER) {
       itemsTotal = items.reduce((sum: number, item: any) => sum + item.subtotal, 0);
@@ -27,20 +65,28 @@ router.post('/', authenticate, validate(CreateOrderSchema), async (req: Authenti
       const breakdown = printPricingEngine.calculatePrice(print_spec);
       itemsTotal = breakdown.total_price;
       if (print_spec.is_physical_pickup) {
-        baseDeliveryFee += 15.0; // Hardcopy pickup extra fee
+        additionalCharges += 15.0; // Hardcopy pickup extra fee
       }
     } else if (order_type === OrderType.PORTER_SERVICE && porter_spec) {
       const weight = porter_spec.weight_kg || 1.0;
       itemsTotal = +(weight * 30.0).toFixed(2); // ₹30/kg
-      baseDeliveryFee = 35.0;
+      additionalCharges += 15.0;
     } else if (order_type === OrderType.ASSIGNMENT_WRITER && assignment_spec) {
       const numPages = assignment_spec.num_pages || 1;
       itemsTotal = +(numPages * 15.0).toFixed(2); // ₹15/page
-      baseDeliveryFee = 30.0;
+      additionalCharges += 10.0;
     }
 
-    const { delivery_fee } = await surgePricingEngine.calculateDeliveryFee(baseDeliveryFee);
-    const totalAmount = +(itemsTotal + delivery_fee).toFixed(2);
+    if (itemsTotal > 100.0) {
+      throw new BadRequestException(
+        `Maximum order limit is ₹100.00 (current order items total: ₹${itemsTotal.toFixed(2)}). Please reduce items or split into multiple orders.`
+      );
+    }
+
+    // Calculate tiered delivery fee based on order total
+    const feeCalculation = await surgePricingEngine.calculateDeliveryFee(itemsTotal, additionalCharges, payment_method);
+    const deliveryFee = feeCalculation.delivery_fee;
+    const totalAmount = +(itemsTotal + deliveryFee).toFixed(2);
 
     const orderId = `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -58,7 +104,7 @@ router.post('/', authenticate, validate(CreateOrderSchema), async (req: Authenti
       delivery_location: delivery_location || req.user!.location,
       customer_phone: customer_phone || req.user!.phone,
       items_total: itemsTotal,
-      delivery_fee,
+      delivery_fee: deliveryFee,
       total_amount: totalAmount,
       notified_partner_ids: [],
     });
