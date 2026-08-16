@@ -89,6 +89,3 @@ All endpoints are prefixed with `/api/v1`:
 ```bash
 docker-compose up --build -d
 ```
-
-### Render
-The repository includes a `render.yaml` blueprint for one-click deployment on Render.

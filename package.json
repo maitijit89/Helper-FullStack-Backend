@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Production-ready Node.js + Express + TypeScript Backend for Quick Commerce, Print/Xerox, Porter (<5kg), and Assignment Writer with Delivery Partner Ecosystem, Razorpay Payments, and Gemini AI.",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
