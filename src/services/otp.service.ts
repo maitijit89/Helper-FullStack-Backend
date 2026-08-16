@@ -7,18 +7,18 @@ class OTPService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  async sendOTP(email: string, purpose: OTPPurpose = OTPPurpose.REGISTRATION): Promise<{ success: boolean; message: string }> {
+  async sendOTP(email: string, purpose: OTPPurpose = OTPPurpose.LOGIN): Promise<{ success: boolean; message: string }> {
     const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
     // Invalidate prior unused OTPs for this email and purpose
     await OTP.updateMany(
-      { email: email.toLowerCase(), purpose, is_used: false },
+      { email: email.toLowerCase().trim(), purpose, is_used: false },
       { $set: { is_used: true } }
     );
 
     const otpDoc = new OTP({
-      email: email.toLowerCase(),
+      email: email.toLowerCase().trim(),
       code,
       purpose,
       expires_at: expiresAt,
@@ -27,7 +27,7 @@ class OTPService {
     await otpDoc.save();
 
     // Send email
-    await emailService.sendOTPEmail(email, code, purpose);
+    await emailService.sendOTPEmail(email.toLowerCase().trim(), code, purpose);
 
     return {
       success: true,
@@ -35,11 +35,20 @@ class OTPService {
     };
   }
 
-  async verifyOTP(email: string, code: string, purpose: OTPPurpose = OTPPurpose.REGISTRATION): Promise<boolean> {
+  async verifyOTP(email: string, code: string, purpose: OTPPurpose = OTPPurpose.LOGIN): Promise<boolean> {
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanCode = code.trim();
+
+    // Match exact purpose or allow LOGIN and REGISTRATION interchangeably
+    const purposeFilter =
+      purpose === OTPPurpose.LOGIN || purpose === OTPPurpose.REGISTRATION
+        ? { $in: [OTPPurpose.LOGIN, OTPPurpose.REGISTRATION] }
+        : purpose;
+
     const otpDoc = await OTP.findOne({
-      email: email.toLowerCase(),
-      code,
-      purpose,
+      email: cleanEmail,
+      code: cleanCode,
+      purpose: purposeFilter,
       is_used: false,
     }).sort({ created_at: -1 });
 

@@ -1,5 +1,15 @@
 import { Router, Response, NextFunction } from 'express';
 import { authenticate, AuthenticatedRequest, requireAdmin } from '../middlewares/auth';
+import { validate } from '../middlewares/validate';
+import {
+  VerifyPartnerSchema,
+  ModerateRatingSchema,
+  UpdateSupportTicketStatusSchema,
+  ProcessWithdrawalSchema,
+  AdminUsersQuerySchema,
+  AdminPartnersQuerySchema,
+  AdminOrdersQuerySchema,
+} from '../schemas/admin.schema';
 import { User, UserRole, PartnerVerificationStatus } from '../models/User';
 import { Order, OrderStatus } from '../models/Order';
 import { Rating } from '../models/Rating';
@@ -15,7 +25,7 @@ const router = Router();
 router.use(authenticate, requireAdmin);
 
 // 1. User & Partner Management
-router.get('/users', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.get('/users', validate(AdminUsersQuerySchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { role, limit = 50, skip = 0 } = req.query;
     const filter: any = {};
@@ -38,7 +48,7 @@ router.get('/users', async (req: AuthenticatedRequest, res: Response, next: Next
   }
 });
 
-router.get('/partners', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.get('/partners', validate(AdminPartnersQuerySchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { status, limit = 50, skip = 0 } = req.query;
     const filter: any = { role: UserRole.PARTNER };
@@ -63,12 +73,9 @@ router.get('/partners', async (req: AuthenticatedRequest, res: Response, next: N
   }
 });
 
-router.post('/partners/:user_id/verify', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/partners/:user_id/verify', validate(VerifyPartnerSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { status, rejection_reason } = req.body;
-    if (![PartnerVerificationStatus.APPROVED, PartnerVerificationStatus.REJECTED].includes(status)) {
-      throw new BadRequestException('Status must be approved or rejected');
-    }
 
     const user = await User.findById(req.params.user_id);
     if (!user || user.role !== UserRole.PARTNER || !user.partner_profile) {
@@ -109,7 +116,7 @@ router.post('/partners/:user_id/verify', async (req: AuthenticatedRequest, res: 
 });
 
 // 2. Orders Management
-router.get('/orders', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.get('/orders', validate(AdminOrdersQuerySchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { status, order_type, limit = 50, skip = 0 } = req.query;
     const filter: any = {};
@@ -146,7 +153,7 @@ router.get('/ratings', async (req: AuthenticatedRequest, res: Response, next: Ne
   }
 });
 
-router.patch('/ratings/:id/moderate', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.patch('/ratings/:id/moderate', validate(ModerateRatingSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { is_hidden, admin_notes } = req.body;
     const rating = await Rating.findById(req.params.id);
@@ -180,7 +187,7 @@ router.get('/support-tickets', async (req: AuthenticatedRequest, res: Response, 
   }
 });
 
-router.patch('/support-tickets/:ticket_id/status', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.patch('/support-tickets/:ticket_id/status', validate(UpdateSupportTicketStatusSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { status, admin_notes } = req.body;
     const ticket = await SupportTicket.findOne({ ticket_id: req.params.ticket_id });
@@ -216,12 +223,9 @@ router.get('/withdrawals', async (req: AuthenticatedRequest, res: Response, next
   }
 });
 
-router.post('/withdrawals/:request_id/process', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/withdrawals/:request_id/process', validate(ProcessWithdrawalSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { status, admin_notes, transaction_reference } = req.body;
-    if (![WithdrawalStatus.APPROVED, WithdrawalStatus.REJECTED].includes(status)) {
-      throw new BadRequestException('Status must be approved or rejected');
-    }
 
     const updated = await walletService.processWithdrawal(
       req.params.request_id,

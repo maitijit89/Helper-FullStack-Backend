@@ -129,7 +129,7 @@ export const swaggerDocument = {
     '/auth/register': {
       post: {
         tags: ['Auth'],
-        summary: 'Register a new User or Delivery Partner',
+        summary: 'Register a new User or Delivery Partner (Password optional with OTP)',
         security: [],
         requestBody: {
           required: true,
@@ -137,10 +137,11 @@ export const swaggerDocument = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['email', 'password'],
+                required: ['email'],
                 properties: {
                   email: { type: 'string', example: 'user@example.com' },
-                  password: { type: 'string', example: 'password123' },
+                  password: { type: 'string', example: 'password123', description: 'Optional password' },
+                  code: { type: 'string', example: '123456', description: 'Optional 6-digit OTP code for instant email verification' },
                   full_name: { type: 'string', example: 'Alex Smith' },
                   phone: { type: 'string', example: '9876543210' },
                   role: { type: 'string', enum: ['user', 'partner'], default: 'user' },
@@ -161,7 +162,7 @@ export const swaggerDocument = {
     '/auth/login': {
       post: {
         tags: ['Auth'],
-        summary: 'Log in with Email and Password',
+        summary: 'Log in with Email and Password OR Email OTP',
         security: [],
         requestBody: {
           required: true,
@@ -169,18 +170,20 @@ export const swaggerDocument = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['email', 'password'],
+                required: ['email'],
                 properties: {
                   email: { type: 'string', example: 'user@example.com' },
-                  password: { type: 'string', example: 'password123' },
+                  password: { type: 'string', example: 'password123', description: 'Provide either password or OTP code' },
+                  code: { type: 'string', example: '123456', description: '6-digit OTP code received on email' },
+                  otp: { type: 'string', example: '123456', description: 'Alias for code' },
                 },
               },
             },
           },
         },
         responses: {
-          200: { description: 'Login successful' },
-          401: { description: 'Incorrect credentials' },
+          200: { description: 'Login successful (returns JWT access and refresh tokens)' },
+          401: { description: 'Incorrect credentials or unverified OTP' },
         },
       },
     },
@@ -206,7 +209,7 @@ export const swaggerDocument = {
     '/auth/otp/send': {
       post: {
         tags: ['Auth - OTP'],
-        summary: 'Send One-Time Password to Email',
+        summary: 'Send One-Time Password (OTP) to Email for Login or Registration',
         security: [],
         requestBody: {
           required: true,
@@ -217,7 +220,7 @@ export const swaggerDocument = {
                 required: ['email'],
                 properties: {
                   email: { type: 'string', example: 'user@example.com' },
-                  purpose: { type: 'string', enum: ['registration', 'login', 'password_reset'], default: 'registration' },
+                  purpose: { type: 'string', enum: ['login', 'registration', 'password_reset'], default: 'login' },
                 },
               },
             },
@@ -229,7 +232,7 @@ export const swaggerDocument = {
     '/auth/otp/verify': {
       post: {
         tags: ['Auth - OTP'],
-        summary: 'Verify OTP Code',
+        summary: 'Verify OTP Code (Auto-logs in and returns tokens for login/registration)',
         security: [],
         requestBody: {
           required: true,
@@ -237,17 +240,18 @@ export const swaggerDocument = {
             'application/json': {
               schema: {
                 type: 'object',
-                required: ['email', 'code'],
+                required: ['email'],
                 properties: {
                   email: { type: 'string', example: 'user@example.com' },
                   code: { type: 'string', example: '123456' },
-                  purpose: { type: 'string', enum: ['registration', 'login', 'password_reset'] },
+                  otp: { type: 'string', example: '123456', description: 'Alias for code' },
+                  purpose: { type: 'string', enum: ['login', 'registration', 'password_reset'], default: 'login' },
                 },
               },
             },
           },
         },
-        responses: { 200: { description: 'OTP verified' } },
+        responses: { 200: { description: 'OTP verified (and logged in if purpose is login/registration)' } },
       },
     },
     '/products': {

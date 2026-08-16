@@ -39,7 +39,7 @@ router.post('/register', authRateLimiter, validate(RegisterSchema), async (req: 
 
 router.post('/login', authRateLimiter, validate(LoginSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const result = await authService.login(req.body.email, req.body.password);
+    const result = await authService.login(req.body);
     res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -103,10 +103,33 @@ router.post('/otp/send', authRateLimiter, validate(SendOTPSchema), async (req: R
 
 router.post('/otp/verify', authRateLimiter, validate(VerifyOTPSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await otpService.verifyOTP(req.body.email, req.body.code, req.body.purpose);
+    const code = req.body.code || req.body.otp;
+    const purpose = req.body.purpose || 'login';
+
+    if (purpose === 'password_reset') {
+      await otpService.verifyOTP(req.body.email, code, purpose as any);
+      res.status(200).json({
+        success: true,
+        message: 'OTP verified successfully for password reset',
+      });
+      return;
+    }
+
+    // Default or LOGIN / REGISTRATION: Authenticate user & return tokens
+    const result = await authService.verifyOTPAndLogin(req.body.email, code, purpose as any);
     res.status(200).json({
       success: true,
-      message: 'OTP verified successfully',
+      message: result.message,
+      data: {
+        user: {
+          id: result.user._id,
+          email: result.user.email,
+          full_name: result.user.full_name,
+          role: result.user.role,
+          partner_profile: result.user.partner_profile,
+        },
+        tokens: result.tokens,
+      },
     });
   } catch (err) {
     next(err);

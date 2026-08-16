@@ -9,6 +9,8 @@ import { env } from '../config/env';
 export interface RegisterDTO {
   email: string;
   password?: string;
+  code?: string;
+  otp?: string;
   full_name?: string;
   phone?: string;
   role?: UserRole;
@@ -16,6 +18,13 @@ export interface RegisterDTO {
   gender?: any;
   college?: string;
   address?: string;
+}
+
+export interface LoginDTO {
+  email: string;
+  password?: string;
+  code?: string;
+  otp?: string;
 }
 
 export interface AuthTokens {
@@ -26,17 +35,25 @@ export interface AuthTokens {
 
 class AuthService {
   async register(data: RegisterDTO): Promise<{ user: IUser; tokens: AuthTokens }> {
-    const existing = await User.findOne({ email: data.email.toLowerCase() });
+    const cleanEmail = data.email.toLowerCase().trim();
+    const existing = await User.findOne({ email: cleanEmail });
     if (existing) {
       throw new ConflictException('Email already registered');
     }
 
+    const otpCode = data.code || data.otp;
+    let isEmailVerified = false;
+    if (otpCode) {
+      await otpService.verifyOTP(cleanEmail, otpCode, OTPPurpose.REGISTRATION);
+      isEmailVerified = true;
+    }
+
     const hashedPassword = data.password ? await hashPassword(data.password) : undefined;
-    const isSuperuser = data.email.toLowerCase() === env.ADMIN_EMAIL.toLowerCase();
+    const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
     const role = isSuperuser ? UserRole.ADMIN : data.role || UserRole.USER;
 
     const user = new User({
-      email: data.email.toLowerCase(),
+      email: cleanEmail,
       hashed_password: hashedPassword,
       full_name: data.full_name,
       phone: data.phone,
@@ -46,7 +63,7 @@ class AuthService {
       college: data.college,
       address: data.address,
       is_superuser: isSuperuser,
-      is_email_verified: false,
+      is_email_verified: isEmailVerified,
       is_active: true,
       partner_profile:
         role === UserRole.PARTNER
@@ -74,27 +91,117 @@ class AuthService {
     return { user, tokens };
   }
 
-  async login(email: string, password?: string): Promise<{ user: IUser; tokens: AuthTokens }> {
-    const user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) {
-      throw new UnauthorizedException('Incorrect email or password');
+  async login(
+    emailOrData: string | LoginDTO,
+    maybePassword?: string,
+    maybeCode?: string
+  ): Promise<{ user: IUser; tokens: AuthTokens }> {
+    let email = '';
+    let password = maybePassword;
+    let otpCode = maybeCode;
+
+    if (typeof emailOrData === 'object') {
+      email = emailOrData.email;
+      password = emailOrData.password;
+      otpCode = emailOrData.code || emailOrData.otp;
+    } else {
+      email = emailOrData;
     }
 
-    if (!user.is_active) {
-      throw new UnauthorizedException('User account is inactive');
+    const cleanEmail = email.toLowerCase().trim();
+
+    // Mode A: OTP verification code provided
+    if (otpCode) {
+      await otpService.verifyOTP(cleanEmail, otpCode, OTPPurpose.LOGIN);
+
+      let user = await User.findOne({ email: cleanEmail });
+      if (!user) {
+        // Auto-create user on passwordless OTP login
+        const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
+        user = new User({
+          email: cleanEmail,
+          role: isSuperuser ? UserRole.ADMIN : UserRole.USER,
+          is_superuser: isSuperuser,
+          is_email_verified: true,
+          is_active: true,
+        });
+        await user.save();
+      } else {
+        if (!user.is_active) {
+          throw new UnauthorizedException('User account is inactive');
+        }
+        if (!user.is_email_verified) {
+          user.is_email_verified = true;
+          await user.save();
+        }
+      }
+
+      const tokens = this.generateAuthTokens(user._id.toString(), user.role);
+      return { user, tokens };
     }
 
-    if (password && user.hashed_password) {
+    // Mode B: Password provided
+    if (password) {
+      const user = await User.findOne({ email: cleanEmail });
+      if (!user) {
+        throw new UnauthorizedException('Incorrect email or password');
+      }
+
+      if (!user.is_active) {
+        throw new UnauthorizedException('User account is inactive');
+      }
+
+      if (!user.hashed_password) {
+        throw new BadRequestException('No password set for this account. Please log in using Email OTP.');
+      }
+
       const isMatch = await verifyPassword(password, user.hashed_password);
       if (!isMatch) {
         throw new UnauthorizedException('Incorrect email or password');
       }
-    } else if (password && !user.hashed_password) {
-      throw new UnauthorizedException('Password not set for this account');
+
+      const tokens = this.generateAuthTokens(user._id.toString(), user.role);
+      return { user, tokens };
+    }
+
+    throw new BadRequestException('Either password or OTP verification code is required to log in');
+  }
+
+  async verifyOTPAndLogin(
+    email: string,
+    code: string,
+    purpose: OTPPurpose = OTPPurpose.LOGIN
+  ): Promise<{ user: IUser; tokens: AuthTokens; message: string }> {
+    const cleanEmail = email.toLowerCase().trim();
+    await otpService.verifyOTP(cleanEmail, code, purpose);
+
+    let user = await User.findOne({ email: cleanEmail });
+    if (!user) {
+      const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
+      user = new User({
+        email: cleanEmail,
+        role: isSuperuser ? UserRole.ADMIN : UserRole.USER,
+        is_superuser: isSuperuser,
+        is_email_verified: true,
+        is_active: true,
+      });
+      await user.save();
+    } else {
+      if (!user.is_active) {
+        throw new UnauthorizedException('User account is inactive');
+      }
+      if (!user.is_email_verified) {
+        user.is_email_verified = true;
+        await user.save();
+      }
     }
 
     const tokens = this.generateAuthTokens(user._id.toString(), user.role);
-    return { user, tokens };
+    return {
+      user,
+      tokens,
+      message: 'OTP verified successfully. Authenticated.',
+    };
   }
 
   async refreshToken(refreshToken: string): Promise<AuthTokens> {

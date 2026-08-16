@@ -4,7 +4,7 @@ import { validate } from '../middlewares/validate';
 import { AddToCartSchema, UpdateCartItemSchema } from '../schemas/cart.schema';
 import { Cart } from '../models/Cart';
 import { Product } from '../models/Product';
-import { NotFoundException } from '../middlewares/errorHandler';
+import { NotFoundException, BadRequestException } from '../middlewares/errorHandler';
 
 const router = Router();
 
@@ -57,6 +57,13 @@ router.post('/items', authenticate, validate(AddToCartSchema), async (req: Authe
     }
 
     cart.recalculateTotal();
+
+    if (cart.items_total > 100.0) {
+      throw new BadRequestException(
+        `Cart total ₹${cart.items_total.toFixed(2)} exceeds the maximum order limit of ₹100.00. Please reduce item quantities.`
+      );
+    }
+
     await cart.save();
 
     res.status(200).json({
@@ -92,6 +99,13 @@ router.patch('/items/:product_id', authenticate, validate(UpdateCartItemSchema),
     }
 
     cart.recalculateTotal();
+
+    if (cart.items_total > 100.0) {
+      throw new BadRequestException(
+        `Cart total ₹${cart.items_total.toFixed(2)} exceeds the maximum order limit of ₹100.00. Please reduce item quantities.`
+      );
+    }
+
     await cart.save();
 
     res.status(200).json({

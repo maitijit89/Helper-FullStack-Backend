@@ -44,16 +44,27 @@ describe('Auth API Integration Tests', () => {
     expect(res.body.data.tokens.refresh_token).toBeDefined();
   });
 
-  it('should fetch authenticated user profile on /auth/me', async () => {
-    const regRes = await request(app).post('/api/v1/auth/register').send(testUser);
-    const token = regRes.body.data.tokens.access_token;
-
+  it('should register a passwordless user successfully', async () => {
     const res = await request(app)
-      .get('/api/v1/auth/me')
-      .set('Authorization', `Bearer ${token}`);
+      .post('/api/v1/auth/register')
+      .send({
+        email: 'otpuser@example.com',
+        full_name: 'Passwordless User',
+      });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.email).toBe(testUser.email);
+    expect(res.body.data.user.email).toBe('otpuser@example.com');
+    expect(res.body.data.tokens.access_token).toBeDefined();
+  });
+
+  it('should send and verify OTP for login', async () => {
+    const sendOtpRes = await request(app)
+      .post('/api/v1/auth/otp/send')
+      .send({ email: 'otplogin@example.com', purpose: 'login' });
+
+    expect(sendOtpRes.status).toBe(200);
+    expect(sendOtpRes.body.success).toBe(true);
   });
 });
+

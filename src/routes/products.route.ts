@@ -5,14 +5,23 @@ import { CreateProductSchema, UpdateProductSchema } from '../schemas/product.sch
 import { Product, ProductCategory } from '../models/Product';
 import { memoryUpload } from '../middlewares/upload';
 import { s3Service } from '../services/s3.service';
+import { redisService } from '../services/redis.service';
 import { NotFoundException } from '../middlewares/errorHandler';
 
 const router = Router();
 
-// Public: List products with search, category filtering and availability
+// Public: List products with caching, search, category filtering and availability
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { category, search, available_only, limit = 50, skip = 0 } = req.query;
+
+    const cacheKey = `products:list:${category || 'all'}:${search || 'none'}:${available_only || 'false'}:${limit}:${skip}`;
+    const cachedData = await redisService.get(cacheKey);
+
+    if (cachedData) {
+      return res.status(200).json(JSON.parse(cachedData));
+    }
+
     const filter: any = {};
 
     if (category && Object.values(ProductCategory).includes(category as ProductCategory)) {
@@ -33,34 +42,52 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       ];
     }
 
-    const products = await Product.find(filter)
-      .sort({ created_at: -1 })
-      .skip(Number(skip))
-      .limit(Number(limit));
+    const [products, total] = await Promise.all([
+      Product.find(filter)
+        .sort({ created_at: -1 })
+        .skip(Number(skip))
+        .limit(Number(limit))
+        .lean(),
+      Product.countDocuments(filter),
+    ]);
 
-    const total = await Product.countDocuments(filter);
-
-    res.status(200).json({
+    const responsePayload = {
       success: true,
       total,
       data: products,
-    });
+    };
+
+    // Cache product lists for 3 minutes (180s)
+    await redisService.set(cacheKey, JSON.stringify(responsePayload), 180);
+
+    res.status(200).json(responsePayload);
   } catch (err) {
     next(err);
   }
 });
 
-// Public: Get single product
+// Public: Get single product with lean execution
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const cacheKey = `products:single:${req.params.id}`;
+    const cached = await redisService.get(cacheKey);
+    if (cached) {
+      return res.status(200).json(JSON.parse(cached));
+    }
+
+    const product = await Product.findById(req.params.id).lean();
     if (!product) {
       throw new NotFoundException('Product not found');
     }
-    res.status(200).json({
+
+    const payload = {
       success: true,
       data: product,
-    });
+    };
+
+    await redisService.set(cacheKey, JSON.stringify(payload), 300);
+
+    res.status(200).json(payload);
   } catch (err) {
     next(err);
   }
@@ -76,6 +103,9 @@ router.post(
     try {
       const product = new Product(req.body);
       await product.save();
+
+      // Invalidate product caches
+      await redisService.delPattern('products:*');
 
       res.status(201).json({
         success: true,
@@ -105,6 +135,9 @@ router.put(
       product.touch();
       await product.save();
 
+      // Invalidate product caches
+      await redisService.delPattern('products:*');
+
       res.status(200).json({
         success: true,
         message: 'Product updated successfully',
@@ -123,6 +156,10 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthenticatedReque
     if (!product) {
       throw new NotFoundException('Product not found');
     }
+
+    // Invalidate product caches
+    await redisService.delPattern('products:*');
+
     res.status(200).json({
       success: true,
       message: 'Product deleted successfully',
@@ -146,7 +183,7 @@ router.post(
       }
 
       if (!req.file) {
-        res.status(400).json({ success: false, detail: 'No image file uploaded' });
+        res.status(400).json({ success: false, message: 'No image file uploaded', detail: 'No image file uploaded' });
         return;
       }
 
@@ -154,6 +191,9 @@ router.post(
       product.image_url = imageUrl;
       product.touch();
       await product.save();
+
+      // Invalidate product caches
+      await redisService.delPattern('products:*');
 
       res.status(200).json({
         success: true,

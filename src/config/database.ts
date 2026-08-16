@@ -27,8 +27,12 @@ export async function connectDB(): Promise<void> {
   try {
     await mongoose.connect(mongoUri, {
       dbName: env.MONGODB_DB_NAME,
-      autoIndex: true,
+      autoIndex: env.ENVIRONMENT !== 'production', // Disable runtime index building in prod for speed
+      maxPoolSize: 50,
+      minPoolSize: 5,
+      maxIdleTimeMS: 30000,
       serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
     });
     logger.info(`MongoDB connected successfully to database: ${env.MONGODB_DB_NAME}`);
   } catch (error) {

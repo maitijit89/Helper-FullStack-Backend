@@ -4,6 +4,7 @@ import { app } from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
 import { connectDB, closeDB } from './config/database';
+import { redisService } from './services/redis.service';
 import { wsManager } from './services/websocket.service';
 import { startKeepAlive, stopKeepAlive } from './services/keepAlive.service';
 
@@ -13,6 +14,10 @@ async function bootstrap() {
 
   // 2. Create HTTP Server
   const server = http.createServer(app);
+
+  // Production HTTP connection tuning for reverse proxies (Render, AWS ALB, Nginx)
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
 
   // 3. Initialize WebSocket Server
   const wss = new WebSocketServer({ server, path: `${env.API_V1_STR}/ws` });
@@ -24,6 +29,7 @@ async function bootstrap() {
     logger.info(`🚀 ${env.PROJECT_NAME} running at http://${env.HOST}:${env.PORT}`);
     logger.info(`📡 API v1 prefix: ${env.API_V1_STR}`);
     logger.info(`🔌 WebSocket live endpoint: ws://${env.HOST}:${env.PORT}${env.API_V1_STR}/ws`);
+    logger.info(`📖 Interactive Swagger Docs: http://${env.HOST}:${env.PORT}/docs`);
     logger.info(`====================================================`);
   });
 
@@ -35,8 +41,9 @@ async function bootstrap() {
     logger.info(`Received ${signal}. Gracefully shutting down...`);
     stopKeepAlive();
     server.close(async () => {
+      await redisService.disconnect();
       await closeDB();
-      logger.info('Server and DB connection closed.');
+      logger.info('Server, Redis, and DB connections closed cleanly.');
       process.exit(0);
     });
   };

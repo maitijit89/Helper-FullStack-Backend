@@ -1,9 +1,18 @@
 # Environment & Virtualenvs
 .env
+.env.*
+!.env.example
 .venv/
 env/
 venv/
 ENV/
+
+# Service account keys & credentials
+*.json.key
+helping-services-*.json
+*-credentials.json
+service-account*.json
+gcp-key*.json
 
 # Python cache & build outputs
 __pycache__/

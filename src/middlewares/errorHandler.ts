@@ -53,6 +53,7 @@ export function errorHandler(
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       success: false,
+      message: err.message,
       detail: err.message,
       ...(err.details ? { details: err.details } : {}),
     });
@@ -66,16 +67,41 @@ export function errorHandler(
     }));
     res.status(422).json({
       success: false,
+      message: 'Validation error',
       detail: 'Validation error',
       errors: errorDetails,
     });
     return;
   }
 
+  // Handle body-parser JSON syntax/parse errors
+  if (err instanceof SyntaxError && 'status' in err && (err as any).status === 400) {
+    res.status(400).json({
+      success: false,
+      message: 'Invalid JSON payload. Please check your request body syntax.',
+      detail: err.message,
+    });
+    return;
+  }
+
+  // Handle generic errors with explicit HTTP status codes
+  if (err.statusCode && typeof err.statusCode === 'number' && err.statusCode < 500) {
+    res.status(err.statusCode).json({
+      success: false,
+      message: err.message || 'Client error',
+      detail: err.message || 'Client error',
+    });
+    return;
+  }
+
   logger.error(`Unhandled exception on ${req.method} ${req.url}:`, err);
+
+  const isProd = process.env.NODE_ENV === 'production';
+  const errorMessage = isProd ? 'Internal server error' : (err.message || 'Internal server error');
 
   res.status(500).json({
     success: false,
-    detail: err.message || 'Internal server error',
+    message: errorMessage,
+    detail: errorMessage,
   });
 }

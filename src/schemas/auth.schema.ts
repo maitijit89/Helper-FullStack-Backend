@@ -5,7 +5,9 @@ import { OTPPurpose } from '../models/OTP';
 export const RegisterSchema = z.object({
   body: z.object({
     email: z.string().email(),
-    password: z.string().min(6),
+    password: z.string().min(6).optional(),
+    code: z.string().length(6).optional(),
+    otp: z.string().length(6).optional(),
     full_name: z.string().optional(),
     phone: z.string().optional(),
     role: z.nativeEnum(UserRole).optional().default(UserRole.USER),
@@ -17,10 +19,17 @@ export const RegisterSchema = z.object({
 });
 
 export const LoginSchema = z.object({
-  body: z.object({
-    email: z.string().email(),
-    password: z.string(),
-  }),
+  body: z
+    .object({
+      email: z.string().email(),
+      password: z.string().optional(),
+      code: z.string().length(6).optional(),
+      otp: z.string().length(6).optional(),
+    })
+    .refine(data => Boolean(data.password || data.code || data.otp), {
+      message: 'Either password or OTP verification code (code/otp) is required to log in',
+      path: ['password'],
+    }),
 });
 
 export const RefreshTokenSchema = z.object({
@@ -32,16 +41,22 @@ export const RefreshTokenSchema = z.object({
 export const SendOTPSchema = z.object({
   body: z.object({
     email: z.string().email(),
-    purpose: z.nativeEnum(OTPPurpose).optional().default(OTPPurpose.REGISTRATION),
+    purpose: z.nativeEnum(OTPPurpose).optional().default(OTPPurpose.LOGIN),
   }),
 });
 
 export const VerifyOTPSchema = z.object({
-  body: z.object({
-    email: z.string().email(),
-    code: z.string().length(6),
-    purpose: z.nativeEnum(OTPPurpose).optional().default(OTPPurpose.REGISTRATION),
-  }),
+  body: z
+    .object({
+      email: z.string().email(),
+      code: z.string().length(6).optional(),
+      otp: z.string().length(6).optional(),
+      purpose: z.nativeEnum(OTPPurpose).optional().default(OTPPurpose.LOGIN),
+    })
+    .refine(data => Boolean(data.code || data.otp), {
+      message: 'OTP verification code (code or otp) is required',
+      path: ['code'],
+    }),
 });
 
 export const ForgotPasswordSchema = z.object({
@@ -57,3 +72,4 @@ export const ResetPasswordSchema = z.object({
     new_password: z.string().min(6),
   }),
 });
+

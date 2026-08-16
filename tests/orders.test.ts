@@ -111,4 +111,29 @@ describe('Orders API Integration Tests', () => {
     expect(res.body.data.delivery_fee).toBe(3.99); // ₹10 order -> ₹3.99
     expect(res.body.data.total_amount).toBe(13.99); // ₹10 + ₹3.99
   });
+
+  it('should reject order if items_total exceeds maximum limit of Rs 100', async () => {
+    const bigOrderPayload = {
+      order_type: OrderType.PRODUCT_ORDER,
+      items: [
+        {
+          product_id: 'prod_999',
+          product_name: 'Premium Gift Pack',
+          quantity: 1,
+          unit_price: 150.0,
+          subtotal: 150.0,
+        },
+      ],
+      payment_method: PaymentMethod.UPI,
+    };
+
+    const res = await request(app)
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(bigOrderPayload);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toContain('Maximum order limit is ₹100.00');
+  });
 });

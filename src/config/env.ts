@@ -29,7 +29,16 @@ export const env = {
   PORT: parseInt(process.env.PORT || '8000', 10),
 
   // Security
-  SECRET_KEY: process.env.SECRET_KEY || 'supersecretkey-change-this-in-production-use-openssl-rand-hex-32',
+  SECRET_KEY: (() => {
+    const key = process.env.SECRET_KEY || 'supersecretkey-change-this-in-production-use-openssl-rand-hex-32';
+    if (
+      (process.env.NODE_ENV === 'production' || process.env.ENVIRONMENT === 'production') &&
+      (!process.env.SECRET_KEY || process.env.SECRET_KEY === 'supersecretkey-change-this-in-production-use-openssl-rand-hex-32')
+    ) {
+      throw new Error('FATAL: Insecure or missing SECRET_KEY in production environment. Please provide a cryptographically secure SECRET_KEY in .env.');
+    }
+    return key;
+  })(),
   ALGORITHM: process.env.ALGORITHM || 'HS256',
   ACCESS_TOKEN_EXPIRE_MINUTES: parseInt(process.env.ACCESS_TOKEN_EXPIRE_MINUTES || '30', 10),
   REFRESH_TOKEN_EXPIRE_DAYS: parseInt(process.env.REFRESH_TOKEN_EXPIRE_DAYS || '7', 10),
