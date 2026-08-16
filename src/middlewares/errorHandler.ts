@@ -1,0 +1,81 @@
+import { Request, Response, NextFunction } from 'express';
+import { ZodError } from 'zod';
+import { logger } from '../config/logger';
+
+export class AppError extends Error {
+  public statusCode: number;
+  public details?: any;
+
+  constructor(message: string, statusCode: number = 400, details?: any) {
+    super(message);
+    this.statusCode = statusCode;
+    this.details = details;
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+export class NotFoundException extends AppError {
+  constructor(message: string = 'Resource not found') {
+    super(message, 404);
+  }
+}
+
+export class UnauthorizedException extends AppError {
+  constructor(message: string = 'Unauthorized') {
+    super(message, 401);
+  }
+}
+
+export class ForbiddenException extends AppError {
+  constructor(message: string = 'Forbidden') {
+    super(message, 403);
+  }
+}
+
+export class BadRequestException extends AppError {
+  constructor(message: string = 'Bad request', details?: any) {
+    super(message, 400, details);
+  }
+}
+
+export class ConflictException extends AppError {
+  constructor(message: string = 'Resource conflict') {
+    super(message, 409);
+  }
+}
+
+export function errorHandler(
+  err: any,
+  req: Request,
+  res: Response,
+  next: NextFunction
+): void {
+  if (err instanceof AppError) {
+    res.status(err.statusCode).json({
+      success: false,
+      detail: err.message,
+      ...(err.details ? { details: err.details } : {}),
+    });
+    return;
+  }
+
+  if (err instanceof ZodError) {
+    const errorDetails = err.errors.map(e => ({
+      field: e.path.join('.'),
+      message: e.message,
+    }));
+    res.status(422).json({
+      success: false,
+      detail: 'Validation error',
+      errors: errorDetails,
+    });
+    return;
+  }
+
+  logger.error(`Unhandled exception on ${req.method} ${req.url}:`, err);
+
+  res.status(500).json({
+    success: false,
+    detail: err.message || 'Internal server error',
+  });
+}

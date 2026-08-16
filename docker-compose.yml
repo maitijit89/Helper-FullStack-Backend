@@ -5,14 +5,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: fastapi_app
+    container_name: helper_backend_app
     ports:
       - "8000:8000"
     environment:
       - ENVIRONMENT=production
       - DEBUG=false
       - MONGODB_URL=mongodb://db:27017
-      - MONGODB_DB_NAME=fastapi_production
+      - MONGODB_DB_NAME=helper_production
       - SECRET_KEY=supersecretkey-change-this-in-production-use-openssl-rand-hex-32
       - REDIS_URL=redis://redis:6379/0
     depends_on:

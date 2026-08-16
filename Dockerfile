@@ -1,40 +1,33 @@
-# Multi-stage Dockerfile for FastAPI Production Base
+# Multi-stage Dockerfile for Node.js + Express + TypeScript Backend
 
-# Stage 1: Build & dependencies installation
-FROM python:3.11-slim as builder
-
-WORKDIR /app
-
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY requirements.txt .
-RUN pip install --user --no-warn-script-location -r requirements.txt
-
-# Stage 2: Runtime image
-FROM python:3.11-slim as runner
+# Stage 1: Build
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PATH=/root/.local/bin:$PATH
+COPY package*.json tsconfig.json ./
+RUN npm ci
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+COPY src ./src
+RUN npm run build
 
-COPY --from=builder /root/.local /root/.local
-COPY . .
+# Stage 2: Production Runner
+FROM node:22-alpine AS runner
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV PORT=8000
+ENV HOST=0.0.0.0
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY --from=builder /app/dist ./dist
+
+# Create uploads directory
+RUN mkdir -p uploads/products uploads/print_documents
 
 EXPOSE 8000
 
-CMD ["gunicorn", "-c", "gunicorn_conf.py", "app.main:app"]
+CMD ["node", "dist/server.js"]

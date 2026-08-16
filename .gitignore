@@ -33,3 +33,4 @@ build/
 Thumbs.db
 
 .vercel
+node_modules

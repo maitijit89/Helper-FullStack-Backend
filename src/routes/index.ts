@@ -1,0 +1,40 @@
+import { Router } from 'express';
+import healthRouter from './health.route';
+import authRouter from './auth.route';
+import usersRouter from './users.route';
+import partnerRouter from './partner.route';
+import adminRouter from './admin.route';
+import adminDashboardRouter from './adminDashboard.route';
+import productsRouter from './products.route';
+import ordersRouter from './orders.route';
+import paymentsRouter from './payments.route';
+import ratingsRouter from './ratings.route';
+import feedbackRouter from './feedback.route';
+import cartRouter from './cart.route';
+import printServiceRouter from './printService.route';
+import assignmentServiceRouter from './assignmentService.route';
+import aiChatRouter from './aiChat.route';
+import supportRouter from './support.route';
+import walletRouter from './wallet.route';
+
+const apiRouter = Router();
+
+apiRouter.use('/', healthRouter);
+apiRouter.use('/auth', authRouter);
+apiRouter.use('/users', usersRouter);
+apiRouter.use('/partner', partnerRouter);
+apiRouter.use('/admin', adminRouter);
+apiRouter.use('/admin/dashboard', adminDashboardRouter);
+apiRouter.use('/products', productsRouter);
+apiRouter.use('/orders', ordersRouter);
+apiRouter.use('/payments', paymentsRouter);
+apiRouter.use('/ratings', ratingsRouter);
+apiRouter.use('/feedback', feedbackRouter);
+apiRouter.use('/cart', cartRouter);
+apiRouter.use('/print', printServiceRouter);
+apiRouter.use('/assignment-service', assignmentServiceRouter);
+apiRouter.use('/ai', aiChatRouter);
+apiRouter.use('/support', supportRouter);
+apiRouter.use('/', walletRouter);
+
+export default apiRouter;
