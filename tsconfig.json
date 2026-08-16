@@ -10,11 +10,9 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "moduleResolution": "node",
     "sourceMap": true,
     "declaration": false,
-    "removeComments": true,
-    "baseUrl": "."
+    "removeComments": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests", "**/*.test.ts"]
