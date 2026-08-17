@@ -7,7 +7,7 @@ class OTPService {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 
-  async sendOTP(email: string, purpose: OTPPurpose = OTPPurpose.LOGIN): Promise<{ success: boolean; message: string }> {
+  async sendOTP(email: string, purpose: OTPPurpose = OTPPurpose.LOGIN): Promise<{ success: boolean; message: string; code: string }> {
     const code = this.generateCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 mins
 
@@ -32,6 +32,7 @@ class OTPService {
     return {
       success: true,
       message: `OTP sent successfully to ${email}`,
+      code,
     };
   }
 

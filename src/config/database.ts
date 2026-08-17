@@ -10,7 +10,18 @@ try {
   // ignore if network permissions restrict custom DNS servers
 }
 
+let cachedConnectionPromise: Promise<typeof mongoose> | null = null;
+
 export async function connectDB(): Promise<void> {
+  if (mongoose.connection.readyState === 1) {
+    return;
+  }
+
+  if (mongoose.connection.readyState === 2 && cachedConnectionPromise) {
+    await cachedConnectionPromise;
+    return;
+  }
+
   const isSrv = env.MONGODB_URL.startsWith('mongodb+srv://');
   let mongoUri = env.MONGODB_URL;
 
@@ -25,17 +36,19 @@ export async function connectDB(): Promise<void> {
   logger.info(`Connecting to MongoDB (${isSrv ? 'Atlas SRV' : 'Direct'})...`);
 
   try {
-    await mongoose.connect(mongoUri, {
+    cachedConnectionPromise = mongoose.connect(mongoUri, {
       dbName: env.MONGODB_DB_NAME,
       autoIndex: env.ENVIRONMENT !== 'production', // Disable runtime index building in prod for speed
-      maxPoolSize: 50,
-      minPoolSize: 5,
+      maxPoolSize: 10,
+      minPoolSize: 1,
       maxIdleTimeMS: 30000,
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
     });
+    await cachedConnectionPromise;
     logger.info(`MongoDB connected successfully to database: ${env.MONGODB_DB_NAME}`);
   } catch (error) {
+    cachedConnectionPromise = null;
     logger.error(`MongoDB connection error: ${error}`);
     throw error;
   }
