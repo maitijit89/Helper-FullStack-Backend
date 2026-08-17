@@ -6,6 +6,8 @@ import morgan from 'morgan';
 import path from 'path';
 import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
+import { connectDB } from './config/database';
+import { logger } from './config/logger';
 import { errorHandler } from './middlewares/errorHandler';
 import { standardRateLimiter } from './middlewares/rateLimiter';
 import { swaggerDocument } from './docs/swagger';
@@ -13,6 +15,16 @@ import apiRouter from './routes';
 
 export function createApp(): Express {
   const app = express();
+
+  // Automatic MongoDB connection check for serverless environments (e.g. Vercel)
+  app.use(async (_req: Request, _res: Response, next) => {
+    try {
+      await connectDB();
+    } catch (err: any) {
+      logger.warn(`Serverless DB auto-connect warning: ${err.message}`);
+    }
+    next();
+  });
 
   // Security headers & CORS
   app.use(

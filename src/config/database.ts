@@ -4,10 +4,12 @@ import { env } from './env';
 import { logger } from './logger';
 
 // Fix for Node.js SRV DNS lookup issues on Windows / local ISP networks
-try {
-  dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
-} catch (e) {
-  // ignore if network permissions restrict custom DNS servers
+if (process.platform === 'win32' && !process.env.VERCEL) {
+  try {
+    dns.setServers(['8.8.8.8', '1.1.1.1', '8.8.4.4']);
+  } catch (e) {
+    // ignore if network permissions restrict custom DNS servers
+  }
 }
 
 let cachedConnectionPromise: Promise<typeof mongoose> | null = null;
