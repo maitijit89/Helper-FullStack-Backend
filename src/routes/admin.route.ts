@@ -48,6 +48,77 @@ router.get('/users', validate(AdminUsersQuerySchema), async (req: AuthenticatedR
   }
 });
 
+// Update user status (activate / deactivate)
+router.patch('/users/:user_id/status', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { is_active } = req.body;
+    if (typeof is_active !== 'boolean') {
+      throw new BadRequestException('is_active boolean field is required');
+    }
+
+    const user = await User.findById(req.params.user_id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.is_active = is_active;
+    user.touch();
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `User account has been ${is_active ? 'activated' : 'deactivated'}`,
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update user role
+router.patch('/users/:user_id/role', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { role } = req.body;
+    if (!role || !Object.values(UserRole).includes(role)) {
+      throw new BadRequestException(`Valid role required: ${Object.values(UserRole).join(', ')}`);
+    }
+
+    const user = await User.findById(req.params.user_id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    user.role = role;
+    user.touch();
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: `User role updated to ${role}`,
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete user permanently
+router.delete('/users/:user_id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.user_id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'User deleted successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.get('/partners', validate(AdminPartnersQuerySchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { status, limit = 50, skip = 0 } = req.query;
@@ -140,6 +211,78 @@ router.get('/orders', validate(AdminOrdersQuerySchema), async (req: Authenticate
   }
 });
 
+// Get single order detail for admin
+router.get('/orders/:order_id', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const order = await Order.findOne({ order_id: req.params.order_id });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    res.status(200).json({
+      success: true,
+      data: order,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Admin force-assign or reassign partner to order
+router.post('/orders/:order_id/assign-partner', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const { partner_id } = req.body;
+    if (!partner_id) {
+      throw new BadRequestException('partner_id is required');
+    }
+
+    const partner = await User.findById(partner_id);
+    if (!partner || partner.role !== UserRole.PARTNER) {
+      throw new NotFoundException('Delivery partner not found');
+    }
+
+    const order = await Order.findOne({ order_id: req.params.order_id });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    order.partner_id = partner._id.toString();
+    order.status = OrderStatus.ASSIGNED;
+    order.touch();
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Order assigned to partner ${partner.full_name || partner.email}`,
+      data: order,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Admin cancel active order
+router.post('/orders/:order_id/cancel', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const order = await Order.findOne({ order_id: req.params.order_id });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    order.status = OrderStatus.CANCELLED;
+    order.touch();
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Order cancelled by admin',
+      data: order,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 3. Ratings Moderation
 router.get('/ratings', async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -164,6 +307,9 @@ router.patch('/ratings/:id/moderate', validate(ModerateRatingSchema), async (req
     if (admin_notes !== undefined) rating.admin_notes = admin_notes;
     rating.touch();
     await rating.save();
+
+    const { recalculatePartnerRating } = await import('./ratings.route');
+    await recalculatePartnerRating(rating.partner_id);
 
     res.status(200).json({
       success: true,

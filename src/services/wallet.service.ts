@@ -22,6 +22,16 @@ class WalletService {
    * Credits delivery earnings to the partner wallet upon order delivery completion.
    */
   async creditOrderEarnings(partnerId: string, orderId: string, deliveryFee: number): Promise<void> {
+    // Prevent duplicate credits for the same order
+    const existingTx = await WalletTransaction.findOne({
+      order_id: orderId,
+      transaction_type: TransactionType.EARNING,
+    });
+    if (existingTx) {
+      logger.warn(`Earnings for order #${orderId} already credited. Skipping duplicate credit.`);
+      return;
+    }
+
     const wallet = await this.getOrCreateWallet(partnerId);
 
     wallet.total_balance = +(wallet.total_balance + deliveryFee).toFixed(2);
@@ -38,6 +48,26 @@ class WalletService {
     await transaction.save();
 
     logger.info(`Credited ₹${deliveryFee} to partner ${partnerId} for order #${orderId}`);
+  }
+
+  /**
+   * Returns a structured earnings history breakdown for partner analytics.
+   */
+  async getEarningsHistory(partnerId: string): Promise<any> {
+    const wallet = await this.getOrCreateWallet(partnerId);
+    const balanceInfo = await this.getWithdrawableBalance(partnerId);
+    const transactions = await WalletTransaction.find({ partner_id: partnerId }).sort({ created_at: -1 });
+
+    const totalOrdersCompleted = transactions.filter(t => t.transaction_type === TransactionType.EARNING).length;
+
+    return {
+      total_balance: wallet.total_balance,
+      withdrawable_balance: balanceInfo.withdrawable_balance,
+      pending_balance: balanceInfo.pending_balance,
+      total_withdrawn: wallet.total_withdrawn,
+      total_completed_trips: totalOrdersCompleted,
+      transactions,
+    };
   }
 
   /**

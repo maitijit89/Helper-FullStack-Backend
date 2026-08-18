@@ -3,19 +3,24 @@ import { UserRole, Gender } from '../models/User';
 import { OTPPurpose } from '../models/OTP';
 
 export const RegisterSchema = z.object({
-  body: z.object({
-    email: z.string().email(),
-    password: z.string().min(6).optional(),
-    code: z.string().length(6).optional(),
-    otp: z.string().length(6).optional(),
-    full_name: z.string().optional(),
-    phone: z.string().optional(),
-    role: z.nativeEnum(UserRole).optional().default(UserRole.USER),
-    dob: z.string().optional(),
-    gender: z.nativeEnum(Gender).optional(),
-    college: z.string().optional(),
-    address: z.string().optional(),
-  }),
+  body: z
+    .object({
+      email: z.string().email('Valid email is required'),
+      password: z.string().min(6, 'Password must be at least 6 characters').optional(),
+      code: z.string().length(6, 'OTP code must be 6 digits').optional(),
+      otp: z.string().length(6, 'OTP code must be 6 digits').optional(),
+      full_name: z.string().min(1, 'Full name is required'),
+      phone: z.string().optional(),
+      role: z.nativeEnum(UserRole).optional().default(UserRole.USER),
+      dob: z.string().optional(),
+      gender: z.nativeEnum(Gender).optional(),
+      college: z.string().optional(),
+      address: z.string().optional(),
+    })
+    .refine(data => Boolean(data.code || data.otp), {
+      message: 'OTP verification code (code or otp) is mandatory to complete registration',
+      path: ['code'],
+    }),
 });
 
 export const LoginSchema = z.object({

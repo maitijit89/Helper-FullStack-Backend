@@ -37,16 +37,17 @@ export function createApp(): Express {
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. mobile apps, curl)
+        // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
         if (!origin) return callback(null, true);
         if (
           env.BACKEND_CORS_ORIGINS.includes('*') ||
           env.BACKEND_CORS_ORIGINS.includes(origin) ||
-          env.ENVIRONMENT === 'development'
+          env.ENVIRONMENT === 'development' ||
+          process.env.NODE_ENV === 'test'
         ) {
           return callback(null, true);
         }
-        return callback(null, true); // Permissive default for ease of local/mobile integration
+        return callback(null, false);
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

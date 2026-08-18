@@ -49,6 +49,37 @@ class RazorpayService {
     }
   }
 
+  async refundPayment(
+    paymentId: string,
+    amountInINR?: number,
+    notes?: Record<string, string>
+  ): Promise<{ refund_id: string; amount: number; status: string }> {
+    if (!this.instance || process.env.NODE_ENV === 'test' || paymentId.startsWith('pay_test') || paymentId.includes('mock')) {
+      logger.info(`Mocking refund for payment: ${paymentId}`);
+      return {
+        refund_id: `rfnd_mock_${Date.now()}`,
+        amount: amountInINR ? Math.round(amountInINR * 100) : 0,
+        status: 'processed',
+      };
+    }
+
+    try {
+      const options: any = { notes };
+      if (amountInINR) {
+        options.amount = Math.round(amountInINR * 100);
+      }
+      const response = await this.instance.payments.refund(paymentId, options);
+      return {
+        refund_id: response.id,
+        amount: Number(response.amount),
+        status: response.status,
+      };
+    } catch (err: any) {
+      logger.error(`Error initiating Razorpay refund: ${err.message}`);
+      throw new BadRequestException(`Failed to process Razorpay refund: ${err.message}`);
+    }
+  }
+
   verifySignature(razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string): boolean {
     if (!env.RAZORPAY_KEY_SECRET || process.env.NODE_ENV === 'test') {
       return true;

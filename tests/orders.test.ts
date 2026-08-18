@@ -2,16 +2,20 @@ import request from 'supertest';
 import { app } from '../src/app';
 import { OrderType, PaymentMethod, OrderStatus } from '../src/models/Order';
 import { surgePricingEngine } from '../src/services/surgePricing.service';
+import { otpService } from '../src/services/otp.service';
+import { OTPPurpose } from '../src/models/OTP';
 
 describe('Orders API Integration Tests', () => {
   let authToken: string;
 
   beforeEach(async () => {
+    const otpRes = await otpService.sendOTP('customer@example.com', OTPPurpose.REGISTRATION);
     const reg = await request(app).post('/api/v1/auth/register').send({
       email: 'customer@example.com',
       password: 'password123',
       full_name: 'John Doe',
       phone: '9998887776',
+      code: otpRes.code,
     });
     authToken = reg.body.data.tokens.access_token;
   });

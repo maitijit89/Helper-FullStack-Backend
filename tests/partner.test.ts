@@ -2,18 +2,22 @@ import request from 'supertest';
 import { app } from '../src/app';
 import { UserRole, PartnerVerificationStatus } from '../src/models/User';
 import { User } from '../src/models/User';
+import { otpService } from '../src/services/otp.service';
+import { OTPPurpose } from '../src/models/OTP';
 
 describe('Delivery Partner Lifecycle Tests', () => {
   let partnerToken: string;
   let partnerId: string;
 
   beforeEach(async () => {
+    const otpRes = await otpService.sendOTP('partner@example.com', OTPPurpose.REGISTRATION);
     const reg = await request(app).post('/api/v1/auth/register').send({
       email: 'partner@example.com',
       password: 'password123',
       full_name: 'Fast Rider',
       role: UserRole.PARTNER,
       phone: '9888877776',
+      code: otpRes.code,
     });
     partnerToken = reg.body.data.tokens.access_token;
     partnerId = reg.body.data.user.id;

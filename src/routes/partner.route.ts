@@ -18,7 +18,9 @@ router.post('/register', authenticate, validate(PartnerRegistrationSchema), asyn
   try {
     const user = req.user!;
     user.role = UserRole.PARTNER;
+    const existingProfile = user.partner_profile ? JSON.parse(JSON.stringify(user.partner_profile)) : {};
     user.partner_profile = {
+      ...existingProfile,
       ...req.body,
       verification_status: PartnerVerificationStatus.PENDING,
       is_online: false,
@@ -228,6 +230,26 @@ router.post(
   }
 );
 
+// Get partner earnings history & analytics
+router.get(
+  '/wallet/earnings-history',
+  authenticate,
+  requirePartnerApproved,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const partnerId = req.user!._id.toString();
+      const history = await walletService.getEarningsHistory(partnerId);
+
+      res.status(200).json({
+        success: true,
+        data: history,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
 // Update delivery progress / status
 router.patch(
   '/orders/:order_id/status',
@@ -247,11 +269,12 @@ router.patch(
         throw new NotFoundException('Order not found or not assigned to you');
       }
 
+      const previousStatus = order.status;
       order.status = status;
       order.touch();
 
-      if (status === OrderStatus.DELIVERED) {
-        // Credit partner earnings
+      if (status === OrderStatus.DELIVERED && previousStatus !== OrderStatus.DELIVERED) {
+        // Credit partner earnings safely once
         await walletService.creditOrderEarnings(partnerId, order.order_id, order.delivery_fee);
       }
 

@@ -38,6 +38,21 @@ router.get('/wallet/transactions', authenticate, requirePartnerApproved, async (
   }
 });
 
+// Get structured earnings history breakdown
+router.get('/wallet/earnings-history', authenticate, requirePartnerApproved, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const partnerId = req.user!._id.toString();
+    const history = await walletService.getEarningsHistory(partnerId);
+
+    res.status(200).json({
+      success: true,
+      data: history,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Request withdrawal
 router.post(
   '/wallet/withdraw',

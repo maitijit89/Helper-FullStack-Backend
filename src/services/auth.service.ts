@@ -42,11 +42,11 @@ class AuthService {
     }
 
     const otpCode = data.code || data.otp;
-    let isEmailVerified = false;
-    if (otpCode) {
-      await otpService.verifyOTP(cleanEmail, otpCode, OTPPurpose.REGISTRATION);
-      isEmailVerified = true;
+    if (!otpCode) {
+      throw new BadRequestException('OTP verification code is required to complete registration');
     }
+
+    await otpService.verifyOTP(cleanEmail, otpCode, OTPPurpose.REGISTRATION);
 
     const hashedPassword = data.password ? await hashPassword(data.password) : undefined;
     const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
@@ -63,7 +63,7 @@ class AuthService {
       college: data.college,
       address: data.address,
       is_superuser: isSuperuser,
-      is_email_verified: isEmailVerified,
+      is_email_verified: true,
       is_active: true,
       partner_profile:
         role === UserRole.PARTNER
@@ -114,26 +114,18 @@ class AuthService {
     if (otpCode) {
       await otpService.verifyOTP(cleanEmail, otpCode, OTPPurpose.LOGIN);
 
-      let user = await User.findOne({ email: cleanEmail });
+      const user = await User.findOne({ email: cleanEmail });
       if (!user) {
-        // Auto-create user on passwordless OTP login
-        const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
-        user = new User({
-          email: cleanEmail,
-          role: isSuperuser ? UserRole.ADMIN : UserRole.USER,
-          is_superuser: isSuperuser,
-          is_email_verified: true,
-          is_active: true,
-        });
+        throw new NotFoundException('Account not found with this email. Please complete registration first.');
+      }
+
+      if (!user.is_active) {
+        throw new UnauthorizedException('User account is inactive');
+      }
+
+      if (!user.is_email_verified) {
+        user.is_email_verified = true;
         await user.save();
-      } else {
-        if (!user.is_active) {
-          throw new UnauthorizedException('User account is inactive');
-        }
-        if (!user.is_email_verified) {
-          user.is_email_verified = true;
-          await user.save();
-        }
       }
 
       const tokens = this.generateAuthTokens(user._id.toString(), user.role);
@@ -149,6 +141,10 @@ class AuthService {
 
       if (!user.is_active) {
         throw new UnauthorizedException('User account is inactive');
+      }
+
+      if (!user.is_email_verified) {
+        throw new UnauthorizedException('Email is not verified. Please complete OTP verification before logging in.');
       }
 
       if (!user.hashed_password) {
@@ -175,25 +171,18 @@ class AuthService {
     const cleanEmail = email.toLowerCase().trim();
     await otpService.verifyOTP(cleanEmail, code, purpose);
 
-    let user = await User.findOne({ email: cleanEmail });
+    const user = await User.findOne({ email: cleanEmail });
     if (!user) {
-      const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
-      user = new User({
-        email: cleanEmail,
-        role: isSuperuser ? UserRole.ADMIN : UserRole.USER,
-        is_superuser: isSuperuser,
-        is_email_verified: true,
-        is_active: true,
-      });
+      throw new NotFoundException('User account not found. Please complete registration first.');
+    }
+
+    if (!user.is_active) {
+      throw new UnauthorizedException('User account is inactive');
+    }
+
+    if (!user.is_email_verified) {
+      user.is_email_verified = true;
       await user.save();
-    } else {
-      if (!user.is_active) {
-        throw new UnauthorizedException('User account is inactive');
-      }
-      if (!user.is_email_verified) {
-        user.is_email_verified = true;
-        await user.save();
-      }
     }
 
     const tokens = this.generateAuthTokens(user._id.toString(), user.role);

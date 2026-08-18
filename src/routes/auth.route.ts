@@ -183,13 +183,14 @@ router.post('/admin/request-otp', authRateLimiter, async (req: Request, res: Res
     }
 
     const otpResult = await otpService.sendOTP(cleanEmail, OTPPurpose.LOGIN);
+    const isTestEnv = process.env.NODE_ENV === 'test';
     res.status(200).json({
       success: true,
       message: 'Admin verification OTP sent successfully',
       data: {
         email: cleanEmail,
         message: 'Verification OTP sent to registered admin email',
-        dev_otp: otpResult.code,
+        ...(isTestEnv ? { dev_otp: otpResult.code } : {}),
       },
     });
   } catch (err) {
@@ -273,37 +274,50 @@ router.post('/signup/user', authRateLimiter, async (req: Request, res: Response,
       throw new BadRequestException('Email is required');
     }
 
-    const existing = await User.findOne({ email: cleanEmail });
-    if (existing) {
-      throw new BadRequestException('Email already registered');
+    let user = await User.findOne({ email: cleanEmail });
+    if (user) {
+      if (user.is_email_verified) {
+        throw new BadRequestException('Email already registered');
+      }
+      user.full_name = name || full_name || user.full_name;
+      user.phone = phone || user.phone;
+      user.college = college || user.college;
+      user.address = address || user.address;
+      user.dob = dob || user.dob;
+      user.gender = gender || user.gender;
+      if (password) {
+        user.hashed_password = await (await import('../utils/security')).hashPassword(password);
+      }
+      await user.save();
+    } else {
+      user = new User({
+        email: cleanEmail,
+        full_name: name || full_name,
+        phone,
+        college,
+        address,
+        dob,
+        gender,
+        role: UserRole.USER,
+        is_email_verified: false,
+        is_active: true,
+      });
+      if (password) {
+        user.hashed_password = await (await import('../utils/security')).hashPassword(password);
+      }
+      await user.save();
     }
-
-    const user = new User({
-      email: cleanEmail,
-      full_name: name || full_name,
-      phone,
-      college,
-      address,
-      dob,
-      gender,
-      role: UserRole.USER,
-      is_email_verified: false,
-      is_active: true,
-    });
-    if (password) {
-      user.hashed_password = await (await import('../utils/security')).hashPassword(password);
-    }
-    await user.save();
 
     const otpResult = await otpService.sendOTP(cleanEmail, OTPPurpose.REGISTRATION);
+    const isTestEnv = process.env.NODE_ENV === 'test';
 
     res.status(201).json({
       success: true,
-      message: 'Registration successful. Verification OTP sent to your email.',
+      message: 'Registration initiated. Verification OTP sent to your email.',
       data: {
         email: cleanEmail,
         message: 'Verification OTP sent',
-        dev_otp: otpResult.code,
+        ...(isTestEnv ? { dev_otp: otpResult.code } : {}),
       },
     });
   } catch (err) {
@@ -345,6 +359,7 @@ router.post('/login/request-otp', authRateLimiter, async (req: Request, res: Res
     }
     const cleanEmail = email.toLowerCase().trim();
     const otpResult = await otpService.sendOTP(cleanEmail, OTPPurpose.LOGIN);
+    const isTestEnv = process.env.NODE_ENV === 'test';
 
     res.status(200).json({
       success: true,
@@ -352,7 +367,7 @@ router.post('/login/request-otp', authRateLimiter, async (req: Request, res: Res
       data: {
         email: cleanEmail,
         message: 'Login OTP sent',
-        dev_otp: otpResult.code,
+        ...(isTestEnv ? { dev_otp: otpResult.code } : {}),
       },
     });
   } catch (err) {
@@ -395,6 +410,7 @@ router.post('/resend-otp', authRateLimiter, async (req: Request, res: Response, 
     }
     const cleanEmail = email.toLowerCase().trim();
     const otpResult = await otpService.sendOTP(cleanEmail, purpose);
+    const isTestEnv = process.env.NODE_ENV === 'test';
 
     res.status(200).json({
       success: true,
@@ -402,7 +418,7 @@ router.post('/resend-otp', authRateLimiter, async (req: Request, res: Response, 
       data: {
         email: cleanEmail,
         message: 'New OTP sent',
-        dev_otp: otpResult.code,
+        ...(isTestEnv ? { dev_otp: otpResult.code } : {}),
       },
     });
   } catch (err) {

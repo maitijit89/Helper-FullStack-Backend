@@ -3,12 +3,13 @@ import { authenticate, AuthenticatedRequest } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { CreateOrderSchema, RateOrderSchema } from '../schemas/order.schema';
 import { Order, OrderStatus, OrderType, PaymentMethod } from '../models/Order';
+import { UserRole } from '../models/User';
 import { Rating } from '../models/Rating';
 import { dispatchEngine } from '../services/dispatch.service';
 import { surgePricingEngine } from '../services/surgePricing.service';
 import { printPricingEngine } from '../services/printPricing.service';
 import { wsManager } from '../services/websocket.service';
-import { BadRequestException, NotFoundException } from '../middlewares/errorHandler';
+import { BadRequestException, NotFoundException, ForbiddenException } from '../middlewares/errorHandler';
 
 const router = Router();
 
@@ -146,6 +147,16 @@ router.get('/:order_id', authenticate, async (req: AuthenticatedRequest, res: Re
     if (!order) {
       throw new NotFoundException('Order not found');
     }
+
+    const userId = req.user!._id.toString();
+    const isOwner = order.customer_id === userId;
+    const isAssignedPartner = order.partner_id === userId;
+    const isAdmin = req.user!.role === UserRole.ADMIN;
+
+    if (!isOwner && !isAssignedPartner && !isAdmin) {
+      throw new ForbiddenException('Access denied: You do not have permission to view this order');
+    }
+
     res.status(200).json({
       success: true,
       data: order,
@@ -161,6 +172,14 @@ router.post('/:order_id/cancel', authenticate, async (req: AuthenticatedRequest,
     const order = await Order.findOne({ order_id: req.params.order_id });
     if (!order) {
       throw new NotFoundException('Order not found');
+    }
+
+    const userId = req.user!._id.toString();
+    const isOwner = order.customer_id === userId;
+    const isAdmin = req.user!.role === UserRole.ADMIN;
+
+    if (!isOwner && !isAdmin) {
+      throw new ForbiddenException('Access denied: You can only cancel your own orders');
     }
 
     if (![OrderStatus.PENDING, OrderStatus.ACCEPTED, OrderStatus.ASSIGNED].includes(order.status)) {
@@ -193,6 +212,11 @@ router.post('/:order_id/rate', authenticate, validate(RateOrderSchema), async (r
       throw new NotFoundException('Order not found');
     }
 
+    const userId = req.user!._id.toString();
+    if (order.customer_id !== userId) {
+      throw new ForbiddenException('Access denied: You can only rate your own orders');
+    }
+
     if (order.status !== OrderStatus.DELIVERED) {
       throw new BadRequestException('Only delivered orders can be rated');
     }
@@ -220,6 +244,8 @@ router.post('/:order_id/rate', authenticate, validate(RateOrderSchema), async (r
         tags,
       });
       await ratingDoc.save();
+      const { recalculatePartnerRating } = await import('./ratings.route');
+      await recalculatePartnerRating(order.partner_id);
     }
 
     res.status(200).json({

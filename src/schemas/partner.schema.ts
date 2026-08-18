@@ -3,11 +3,11 @@ import { GPSLocationSchema } from './location.schema';
 
 export const PartnerRegistrationSchema = z.object({
   body: z.object({
-    vehicle_type: z.string().optional(),
-    vehicle_number: z.string().optional(),
-    driving_license_number: z.string().optional(),
+    vehicle_type: z.string().min(1, 'Vehicle type is required'),
+    vehicle_number: z.string().min(1, 'Vehicle number is required'),
+    driving_license_number: z.string().min(1, 'Driving license number is required'),
     driving_license_url: z.string().optional(),
-    aadhaar_number: z.string().optional(),
+    aadhaar_number: z.string().min(1, 'Aadhaar number is required'),
     aadhaar_url: z.string().optional(),
     upi_id: z.string().optional(),
     bank_account_number: z.string().optional(),

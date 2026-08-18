@@ -1,5 +1,5 @@
 import { Router, Response, NextFunction } from 'express';
-import { optionalAuthenticate, AuthenticatedRequest } from '../middlewares/auth';
+import { authenticate, optionalAuthenticate, AuthenticatedRequest } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { CreateSupportTicketSchema } from '../schemas/support.schema';
 import { SupportTicket, SupportTicketStatus } from '../models/SupportTicket';
@@ -34,20 +34,16 @@ router.post('/', optionalAuthenticate, validate(CreateSupportTicketSchema), asyn
   }
 });
 
-// Get user's own tickets
-router.get('/my-tickets', optionalAuthenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// Get user's own tickets (Requires Authentication)
+router.get('/my-tickets', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    const filter: any = {};
-    if (req.user) {
-      filter.$or = [{ user_id: req.user._id.toString() }, { email: req.user.email }];
-    } else if (req.query.email) {
-      filter.email = String(req.query.email);
-    } else {
-      res.status(200).json({ success: true, data: [] });
-      return;
-    }
+    const userId = req.user!._id.toString();
+    const userEmail = req.user!.email;
 
-    const tickets = await SupportTicket.find(filter).sort({ created_at: -1 });
+    const tickets = await SupportTicket.find({
+      $or: [{ user_id: userId }, { email: userEmail }],
+    }).sort({ created_at: -1 });
+
     res.status(200).json({
       success: true,
       data: tickets,

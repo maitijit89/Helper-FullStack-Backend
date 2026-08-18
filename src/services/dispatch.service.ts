@@ -69,8 +69,7 @@ class DispatchEngine {
       });
     }
 
-    order.notified_partner_ids = notifiedIds;
-    await order.save();
+    await Order.updateOne({ _id: order._id }, { $set: { notified_partner_ids: notifiedIds } });
 
     logger.info(`Order ${order.order_id} ringing algorithm notified ${notifiedIds.length} partners.`);
     return notifiedIds;

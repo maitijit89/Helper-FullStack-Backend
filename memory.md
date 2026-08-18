@@ -6,62 +6,32 @@ This document serves as the persistent memory log and state repository for the *
 
 ## 1. Project Context & Purpose
 
-**Helper FullStack Backend** is an asynchronous Python + FastAPI backend serving a hyper-local multi-service platform:
-- **Quick Commerce**: Cold drinks, snacks, cakes, stationery.
-- **Print & Xerox Service**: PDF upload, page counting via `pypdf`, color/paper size/binding options.
-- **Porter Parcel Courier (< 5 kg)**: Pickup & delivery parcel service.
-- **Handwritten Assignment Writer**: Custom handwritten notes/assignments service.
-- **Delivery Partner Ecosystem**: GPS-based dispatching (1 km radius ringing algorithm), real-time WebSocket location tracking, partner earnings, and 48-hour holding period wallet system.
-- **Partner Rating & Reviews**: Star rating (1-5), feedback tags, review text, automatic partner score calculation, and admin moderation.
-- **Payments**: Razorpay Payment Gateway integration for online payments and refund workflows.
-- **AI Support**: Gemini AI (`gemini-1.5-flash`) assistant integration.
+**Helper FullStack Backend** is a production-ready Node.js + Express + TypeScript backend serving a hyper-local multi-service platform:
+- **Quick Commerce**: Cold drinks, snacks, cakes, stationery (Max order limit: ₹100.00).
+- **Print & Xerox Service**: PDF upload, page counting via `pdf-parse`, color/paper size/binding options.
+- **Porter Parcel Courier (< 5 kg)**: Pickup & delivery parcel service (₹30/kg).
+- **Handwritten Assignment Writer**: Custom handwritten notes/assignments service (₹15–₹20/page).
+- **Delivery Partner Ecosystem**: GPS-based dispatching (1 km Haversine radius ringing algorithm), real-time WebSocket location tracking, partner earnings, and 48-hour holding period wallet system.
+- **Partner Rating & Reviews**: Star rating (1-5), feedback tags, review text, automatic partner rolling average recalculation, and admin moderation.
+- **Payments**: Razorpay Payment Gateway integration for online payments, webhook verification, and refund workflows.
+- **AI Support**: Gemini AI assistant integration with graceful offline fallbacks.
 
 ---
 
-## 2. Recent Implementation Milestones
+## 2. Recent Implementation Milestones & Bug Fixes
 
-### 2.1 Partner Rating & Review System
-- **Models & Schemas**: Created `Rating` document model, added rating fields to `Order` (`is_rated`, `rating`, `review`) and `PartnerProfile` (`rating`, `total_ratings`, `rating_sum`).
-- **CRUD & Recalculation**: Implemented `rating_crud` with automatic rolling average recalculation upon rating creation, patching, hiding, or deletion.
-- **Endpoints**:
-  - `POST /api/v1/ratings/`: Customer rates partner for delivered order.
-  - `GET /api/v1/ratings/my-ratings`, `GET /api/v1/ratings/order/{order_id}`, `PATCH /api/v1/ratings/{rating_id}`, `GET /api/v1/ratings/partner/{partner_id}`.
-  - `GET /api/v1/partner/ratings`, `GET /api/v1/partner/ratings/summary`.
-  - `GET /api/v1/admin/ratings`, `PATCH /api/v1/admin/ratings/{rating_id}`, `DELETE /api/v1/admin/ratings/{rating_id}`, `PATCH /api/v1/admin/partners/{partner_id}/rating`, `POST /api/v1/admin/partners/{partner_id}/recalculate-rating`.
-- **Test Suite**: `tests/api/test_ratings.py` (6 tests passing).
+### 2.1 Earning Security & Ringing Dispatch
+- **Duplicate Earnings Protection**: Added idempotency guards in `walletService.creditOrderEarnings` and `partner.route.ts` to prevent repeated calls on `DELIVERED` status from double-crediting partner wallets.
+- **Atomic Ringing Notification**: Fixed Mongoose OCC `VersionError` by utilizing atomic `Order.updateOne` for `notified_partner_ids` in `dispatchEngine.ringNearbyPartners`.
+- **Partner Profile Preservation**: Preserved existing uploaded document URLs and partner attributes during `POST /api/v1/partner/register`.
+- **Earnings History Analytics**: Added `GET /api/v1/partner/wallet/earnings-history` and `GET /api/v1/wallet/earnings-history` returning completed trips, mature withdrawable funds, and balance breakdown.
 
-### 2.2 Admin Management, Refunds & Earnings Analytics
-- **Admin Order Management**:
-  - `GET /api/v1/admin/orders`: List all platform orders with multi-field filters (`status`, `order_type`, `payment_status`, `customer_id`, `partner_id`, pagination).
-  - `GET /api/v1/admin/orders/{order_id}`: Inspect single order details.
-  - `POST /api/v1/admin/orders/{order_id}/assign-partner`: Force-assign/reassign order to a delivery partner.
-  - `POST /api/v1/admin/orders/{order_id}/cancel`: Admin cancel active order.
-- **Admin User Management**:
-  - `PATCH /api/v1/admin/users/{user_id}/status`: Activate or suspend/deactivate user account (`is_active`).
-  - `PATCH /api/v1/admin/users/{user_id}/role`: Update user role (`user`, `partner`, `admin`).
-  - `DELETE /api/v1/admin/users/{user_id}`: Permanently delete user from MongoDB.
-- **Razorpay Refund API**:
-  - `POST /api/v1/payments/razorpay/refund`: Full/partial refund for prepaid orders via Razorpay API with order state transition.
-- **Partner Earnings Analytics**:
-  - `GET /api/v1/partner/wallet/earnings-history`: Daily/weekly breakdown of earnings, 48h holding balance maturity status, and completed trip counts.
-- **Test Suite**: `tests/api/test_admin_management_and_refunds.py` (5 tests passing).
-
-### 2.3 User & Partner App Feedback System
-- **Models & Schemas**: Created `Feedback` document model ([feedback.py](file:///e:/Helper-FullStack-Backend/app/models/feedback.py)) and Pydantic DTOs ([feedback.py](file:///e:/Helper-FullStack-Backend/app/schemas/feedback.py)). Supports star rating (1-5), categories (`app_experience`, `delivery_service`, `pricing`, `feature_request`, `bug_report`, `support`, `general`), message, and client device telemetry.
-- **Endpoints**:
-  - `POST /api/v1/feedback/`: Customer or Delivery Partner submits app feedback.
-  - `GET /api/v1/feedback/me`: View submitted feedback history and admin replies.
-  - `GET /api/v1/feedback/{feedback_id}`: View single feedback item.
-  - `GET /api/v1/feedback/admin/all`: Admin query with multi-field filters (`role`, `category`, `status`, `min_rating`, `max_rating`, pagination).
-  - `GET /api/v1/feedback/admin/summary`: Real-time feedback analytics dashboard (average ratings, customer vs partner satisfaction score, category breakdown, star distribution).
-  - `PATCH /api/v1/feedback/admin/{feedback_id}`: Triage status (`NEW`, `IN_REVIEW`, `RESOLVED`, `ARCHIVED`), add notes, and reply.
-  - `DELETE /api/v1/feedback/admin/{feedback_id}`: Delete feedback.
-- **Test Suite**: `tests/api/test_feedback.py` (4 tests passing).
-
-### 2.4 Razorpay Payment Gateway Integration
-- **Credentials Configured**: Set `RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET` in `.env` and `app/core/config.py`.
-- **Endpoints**: `POST /payments/razorpay/create-order`, `POST /payments/razorpay/verify`, `POST /payments/razorpay/webhook`, `POST /payments/razorpay/refund`.
-- **Test Suite**: `tests/api/test_payments.py` (passing).
+### 2.2 Admin Management, Refunds & Feedback
+- **Admin User Actions**: `PATCH /api/v1/admin/users/:user_id/status`, `PATCH /api/v1/admin/users/:user_id/role`, `DELETE /api/v1/admin/users/:user_id`.
+- **Admin Order Actions**: `GET /api/v1/admin/orders/:order_id`, `POST /api/v1/admin/orders/:order_id/assign-partner`, `POST /api/v1/admin/orders/:order_id/cancel`.
+- **Admin Feedback Moderation & Analytics**: `GET /api/v1/feedback/admin/all`, `GET /api/v1/feedback/admin/summary`, `PATCH /api/v1/feedback/admin/:feedback_id`, `DELETE /api/v1/feedback/admin/:feedback_id`.
+- **Razorpay Refunds**: `POST /api/v1/payments/razorpay/refund` and `razorpayService.refundPayment`.
+- **Partner Rating Sync**: Integrated automatic partner rating recalculation into order rating submissions and admin rating moderation.
 
 ---
 
@@ -69,21 +39,21 @@ This document serves as the persistent memory log and state repository for the *
 
 | Parameter | Current Value | Notes |
 | :--- | :--- | :--- |
-| **Framework** | FastAPI 0.111+ / Python 3.13 | Asynchronous ASGI server via Uvicorn |
-| **Database** | MongoDB Atlas (`helper_services_db`) | Connected via Motor & Beanie ODM |
-| **Caching** | Upstash Redis | Connection string in `.env` (`REDIS_URL`) |
-| **File Storage** | AWS S3 (`helper-app-uploads-prod-2026`) | Region `ap-south-1` |
+| **Framework** | Express 4.21+ / Node.js 20+ / TypeScript 5.7+ | Built with `tsc` & executed via `tsx`/`node` |
+| **Database** | MongoDB Atlas / Memory Server | Mongoose 8.9+ ODM |
+| **Caching** | Upstash Redis | Connection string in `.env` (`REDIS_URL`) with memory fallback |
+| **File Storage** | AWS S3 (`helper-app-uploads-prod-2026`) | Region `ap-south-1` with local mock fallback |
 | **Razorpay Key ID** | `rzp_test_TQ5kPMhrxMZoFT` | Configured in `.env` |
 | **Designated Admin**| `helpingservicesteam@gmail.com` | Receives 6-digit OTP for admin authentication |
-| **AI Model** | `gemini-1.5-flash` | Google Gemini API key configured in `.env` |
-| **Total Tests** | `93 passed` | Pytest passing rate: 100% |
+| **AI Model** | `gemini-1.5-flash` | Configured in `.env` with fallback |
+| **Total Test Suites** | `10 passed (58 tests total)` | Passing rate: 100% |
+| **TypeScript Build** | `tsc` Clean (0 errors) | `npm run build` succeeds |
 
 ---
 
-## 4. Key Architectural Patterns & Gotchas
+## 4. Key Architectural Patterns
 
-1. **Beanie ODM & Model Updates**: Always call `document.touch()` before saving updated models to ensure `updated_at` timestamps update correctly.
-2. **Payment Security**: Payment verification endpoints MUST use `razorpay_service.verify_payment_signature` to calculate and compare HMAC-SHA256 hex digests.
-3. **Exceptions**: All custom exceptions inherit from `AppException` in `app/core/exceptions.py`. Exception handlers format output into standard JSON (`{"success": false, "error": {...}}`).
-4. **Partner Ringing Algorithm**: Delivery partners must have `is_gps_enabled = True` and be within a 1 km Haversine radius to be notified of pending orders.
-5. **Wallet Holding Period**: Partner earnings have a 48-hour holding period before becoming withdrawable balance. Admin approval deducts wallet balance atomically.
+1. **Mongoose Models**: Call `document.touch()` before saving updated models to ensure `updated_at` timestamps update correctly.
+2. **Payment Security**: Payment verification endpoints use `razorpayService.verifySignature` to calculate and compare HMAC-SHA256 digests.
+3. **Partner Ringing Algorithm**: Delivery partners must have `is_gps_enabled = true`, `is_online = true`, `verification_status = 'approved'`, and be within a 1 km Haversine radius to be notified of pending orders.
+4. **Wallet Holding Period**: Partner earnings have a 48-hour holding period before becoming withdrawable balance. Admin approval deducts wallet balance atomically.

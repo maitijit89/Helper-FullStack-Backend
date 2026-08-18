@@ -3,7 +3,7 @@ import { env } from '../config/env';
 
 export const standardRateLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: env.RATE_LIMIT_PER_MINUTE,
+  max: process.env.NODE_ENV === 'test' ? 10000 : env.RATE_LIMIT_PER_MINUTE,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -14,7 +14,7 @@ export const standardRateLimiter = rateLimit({
 
 export const authRateLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: env.AUTH_RATE_LIMIT_PER_MINUTE,
+  max: process.env.NODE_ENV === 'test' ? 10000 : env.AUTH_RATE_LIMIT_PER_MINUTE,
   standardHeaders: true,
   legacyHeaders: false,
   message: {

@@ -8,6 +8,26 @@ import { BadRequestException, NotFoundException } from '../middlewares/errorHand
 
 const router = Router();
 
+import { User } from '../models/User';
+
+export async function recalculatePartnerRating(partnerId: string): Promise<void> {
+  const ratings = await Rating.find({ partner_id: partnerId, is_hidden: false });
+  const total = ratings.length;
+  const sum = ratings.reduce((acc, r) => acc + r.rating, 0);
+  const avg = total > 0 ? +(sum / total).toFixed(2) : 5.0;
+
+  await User.updateOne(
+    { _id: partnerId },
+    {
+      $set: {
+        'partner_profile.rating': avg,
+        'partner_profile.total_ratings': total,
+        'partner_profile.rating_sum': sum,
+      },
+    }
+  );
+}
+
 // Create rating for a delivered order
 router.post('/', authenticate, validate(CreateRatingSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -46,6 +66,9 @@ router.post('/', authenticate, validate(CreateRatingSchema), async (req: Authent
     order.review = review;
     order.touch();
     await order.save();
+
+    // Recalculate partner rolling average score
+    await recalculatePartnerRating(order.partner_id);
 
     res.status(201).json({
       success: true,
