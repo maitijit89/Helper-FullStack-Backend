@@ -140,4 +140,39 @@ describe('Orders API Integration Tests', () => {
     expect(res.body.success).toBe(false);
     expect(res.body.message).toContain('Maximum order limit is ₹100.00');
   });
+
+  it('should get live location details for an existing order', async () => {
+    const orderPayload = {
+      order_type: OrderType.PRODUCT_ORDER,
+      items: [
+        {
+          product_id: 'prod_101',
+          product_name: 'Pen',
+          quantity: 1,
+          unit_price: 15.0,
+          subtotal: 15.0,
+        },
+      ],
+      payment_method: PaymentMethod.UPI,
+      delivery_address: 'Main Gate, Campus',
+      delivery_location: { latitude: 28.545, longitude: 77.192 },
+    };
+
+    const createRes = await request(app)
+      .post('/api/v1/orders')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send(orderPayload);
+
+    const orderId = createRes.body.data.order_id;
+
+    const locRes = await request(app)
+      .get(`/api/v1/orders/${orderId}/live-location`)
+      .set('Authorization', `Bearer ${authToken}`);
+
+    expect(locRes.status).toBe(200);
+    expect(locRes.body.success).toBe(true);
+    expect(locRes.body.data.order_id).toBe(orderId);
+    expect(locRes.body.data.customer_location).toBeDefined();
+    expect(locRes.body.data.customer_location.latitude).toBe(28.545);
+  });
 });

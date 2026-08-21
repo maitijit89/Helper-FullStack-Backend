@@ -3,11 +3,12 @@ import { authenticate, AuthenticatedRequest } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { CreateOrderSchema, RateOrderSchema } from '../schemas/order.schema';
 import { Order, OrderStatus, OrderType, PaymentMethod } from '../models/Order';
-import { UserRole } from '../models/User';
+import { User, UserRole } from '../models/User';
 import { Rating } from '../models/Rating';
 import { dispatchEngine } from '../services/dispatch.service';
 import { surgePricingEngine } from '../services/surgePricing.service';
 import { printPricingEngine } from '../services/printPricing.service';
+import { geoService } from '../services/geo.service';
 import { wsManager } from '../services/websocket.service';
 import { BadRequestException, NotFoundException, ForbiddenException } from '../middlewares/errorHandler';
 
@@ -160,6 +161,127 @@ router.get('/:order_id', authenticate, async (req: AuthenticatedRequest, res: Re
     res.status(200).json({
       success: true,
       data: order,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 3.1 Get order live location & partner tracking
+router.get('/:order_id/live-location', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const order = await Order.findOne({ order_id: req.params.order_id });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const userId = req.user!._id.toString();
+    const isOwner = order.customer_id === userId;
+    const isAssignedPartner = order.partner_id === userId;
+    const isAdmin = req.user!.role === UserRole.ADMIN;
+
+    if (!isOwner && !isAssignedPartner && !isAdmin) {
+      throw new ForbiddenException('Access denied: You do not have permission to view this order location');
+    }
+
+    let partnerData = undefined;
+    let partnerLocation = undefined;
+
+    if (order.partner_id) {
+      const partner = await User.findById(order.partner_id);
+      if (partner) {
+        partnerData = {
+          id: partner._id.toString(),
+          name: partner.full_name || 'Delivery Partner',
+          phone: partner.phone || '',
+        };
+        if (partner.location?.latitude && partner.location?.longitude) {
+          partnerLocation = {
+            latitude: partner.location.latitude,
+            longitude: partner.location.longitude,
+            accuracy: partner.location.accuracy,
+            address: partner.location.address,
+          };
+        }
+      }
+    }
+
+    let customerLocation = undefined;
+    if (order.delivery_location?.latitude && order.delivery_location?.longitude) {
+      customerLocation = {
+        latitude: order.delivery_location.latitude,
+        longitude: order.delivery_location.longitude,
+        address: order.delivery_address || order.delivery_location.address,
+      };
+    } else if (order.porter_spec?.drop_location?.latitude && order.porter_spec?.drop_location?.longitude) {
+      customerLocation = {
+        latitude: order.porter_spec.drop_location.latitude,
+        longitude: order.porter_spec.drop_location.longitude,
+        address: order.porter_spec.drop_address,
+      };
+    }
+
+    let distanceBetweenKm: number | undefined = undefined;
+    if (partnerLocation && customerLocation) {
+      distanceBetweenKm = geoService.calculateDistance(
+        { latitude: partnerLocation.latitude, longitude: partnerLocation.longitude },
+        { latitude: customerLocation.latitude, longitude: customerLocation.longitude }
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        order_id: order.order_id,
+        status: order.status,
+        partner: partnerData,
+        partner_location: partnerLocation,
+        customer_location: customerLocation,
+        distance_between_km: distanceBetweenKm,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 3.2 Get order document details (for print / assignment orders)
+router.get('/:order_id/document', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const order = await Order.findOne({ order_id: req.params.order_id });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+
+    const userId = req.user!._id.toString();
+    const isOwner = order.customer_id === userId;
+    const isAssignedPartner = order.partner_id === userId;
+    const isAdmin = req.user!.role === UserRole.ADMIN;
+
+    if (!isOwner && !isAssignedPartner && !isAdmin) {
+      throw new ForbiddenException('Access denied: You do not have permission to view this document');
+    }
+
+    const printSpec = order.print_spec || order.assignment_spec;
+    if (!printSpec || !printSpec.file_url) {
+      throw new NotFoundException('No document associated with this order');
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        order_id: order.order_id,
+        order_status: order.status,
+        document_name: printSpec.document_name,
+        file_url: printSpec.file_url,
+        download_url: printSpec.file_url,
+        num_pages: printSpec.num_pages,
+        num_copies: (printSpec as any).num_copies || 1,
+        color_mode: (printSpec as any).color_mode || 'black_and_white',
+        paper_size: (printSpec as any).paper_size || 'A4',
+        is_double_sided: (printSpec as any).is_double_sided || false,
+        binding_type: printSpec.binding_type || 'none',
+      },
     });
   } catch (err) {
     next(err);
