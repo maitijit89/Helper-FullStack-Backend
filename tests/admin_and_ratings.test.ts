@@ -163,6 +163,22 @@ describe('Admin Management, Ratings & Feedback Integration Tests', () => {
       expect(myFbRes.body.data.length).toBe(1);
       expect(myFbRes.body.data[0].category).toBe('app_experience');
     });
+
+    it('should submit feedback using comment field and custom frontend categories', async () => {
+      const fbRes = await request(app)
+        .post('/api/v1/feedback')
+        .set('Authorization', `Bearer ${customerToken}`)
+        .send({
+          rating: 4,
+          category: 'ui_ux',
+          comment: 'The campus UI navigation is very responsive!',
+        });
+
+      expect(fbRes.status).toBe(201);
+      expect(fbRes.body.success).toBe(true);
+      expect(fbRes.body.data.message).toBe('The campus UI navigation is very responsive!');
+      expect(fbRes.body.data.category).toBe('ui_ux');
+    });
   });
 
   describe('Admin Dashboard, Partner Verification & Withdrawal Processing', () => {

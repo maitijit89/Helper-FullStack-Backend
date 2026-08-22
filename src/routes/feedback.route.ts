@@ -11,8 +11,10 @@ const router = Router();
 router.post('/', authenticate, validate(CreateFeedbackSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
+    const messageText = req.body.message || req.body.comment || '';
     const feedback = new Feedback({
       ...req.body,
+      message: messageText,
       user_id: user._id.toString(),
       user_name: user.full_name || user.email,
       user_email: user.email,

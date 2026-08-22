@@ -16,6 +16,10 @@ export enum FeedbackCategory {
   BUG_REPORT = 'bug_report',
   SUPPORT = 'support',
   GENERAL = 'general',
+  UI_UX = 'ui_ux',
+  DELIVERY_SPEED = 'delivery_speed',
+  DELIVERY_BEHAVIOR = 'delivery_behavior',
+  APP_BUG = 'app_bug',
 }
 
 export interface IFeedback extends Document {
