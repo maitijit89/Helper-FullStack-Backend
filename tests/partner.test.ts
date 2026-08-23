@@ -82,4 +82,17 @@ describe('Delivery Partner Lifecycle Tests', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.email).toBe('partner@example.com');
   });
+
+  it('should upload partner PAN card and Aadhaar KYC documents', async () => {
+    const res = await request(app)
+      .post('/api/v1/partner/upload-documents')
+      .set('Authorization', `Bearer ${partnerToken}`)
+      .attach('pan_card', Buffer.from('fake pan image content'), 'pan.jpg')
+      .attach('aadhaar', Buffer.from('fake aadhaar image content'), 'aadhaar.jpg');
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.pan_card_url).toBeDefined();
+    expect(res.body.data.aadhaar_url).toBeDefined();
+  });
 });

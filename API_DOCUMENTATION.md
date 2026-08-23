@@ -1014,7 +1014,7 @@
 `POST /partner/upload-documents`  
 *Headers*: `Authorization: Bearer <token>`, `Content-Type: multipart/form-data`  
 *Form Data*:
-- `driving_license` (File: Image or PDF)
+- `pan_card` (File: Image or PDF)
 - `aadhaar` (File: Image or PDF)
 ```json
 // Response (200 OK)
@@ -1023,7 +1023,7 @@
   "message": "Documents uploaded successfully",
   "data": {
     "verification_status": "pending",
-    "driving_license_url": "https://s3.../license.jpg",
+    "pan_card_url": "https://s3.../pan.jpg",
     "aadhaar_url": "https://s3.../aadhaar.jpg"
   }
 }

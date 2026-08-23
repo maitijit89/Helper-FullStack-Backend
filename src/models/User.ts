@@ -36,6 +36,8 @@ export interface IPartnerProfile {
   vehicle_number?: string;
   driving_license_number?: string;
   driving_license_url?: string;
+  pan_card_number?: string;
+  pan_card_url?: string;
   aadhaar_number?: string;
   aadhaar_url?: string;
   verification_status: PartnerVerificationStatus;
@@ -87,6 +89,8 @@ const PartnerProfileSchema = new Schema(
     vehicle_number: { type: String },
     driving_license_number: { type: String },
     driving_license_url: { type: String },
+    pan_card_number: { type: String },
+    pan_card_url: { type: String },
     aadhaar_number: { type: String },
     aadhaar_url: { type: String },
     verification_status: {

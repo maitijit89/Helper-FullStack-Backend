@@ -89,11 +89,13 @@ router.post('/register', authenticate, validate(PartnerRegistrationSchema), asyn
   }
 });
 
-// Partner document upload (Driving license, Aadhaar)
+// Partner document upload (PAN card, Aadhaar)
 router.post(
   '/upload-documents',
   authenticate,
   memoryUpload.fields([
+    { name: 'pan_card', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
     { name: 'driving_license', maxCount: 1 },
     { name: 'aadhaar', maxCount: 1 },
   ]),
@@ -109,10 +111,11 @@ router.post(
         };
       }
 
-      if (files?.driving_license?.[0]) {
-        const dlFile = files.driving_license[0];
-        const dlUrl = await s3Service.uploadFile(dlFile.buffer, dlFile.originalname, dlFile.mimetype);
-        user.partner_profile.driving_license_url = dlUrl;
+      const panFile = files?.pan_card?.[0] || files?.pan?.[0] || files?.driving_license?.[0];
+      if (panFile) {
+        const panUrl = await s3Service.uploadFile(panFile.buffer, panFile.originalname, panFile.mimetype);
+        user.partner_profile.pan_card_url = panUrl;
+        user.partner_profile.driving_license_url = panUrl; // Preserve backward compatibility
       }
 
       if (files?.aadhaar?.[0]) {
@@ -127,7 +130,12 @@ router.post(
       res.status(200).json({
         success: true,
         message: 'Documents uploaded successfully',
-        data: user.partner_profile,
+        data: {
+          verification_status: user.partner_profile.verification_status,
+          pan_card_url: user.partner_profile.pan_card_url,
+          aadhaar_url: user.partner_profile.aadhaar_url,
+          ...(user.partner_profile.driving_license_url ? { driving_license_url: user.partner_profile.driving_license_url } : {}),
+        },
       });
     } catch (err) {
       next(err);
