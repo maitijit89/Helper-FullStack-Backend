@@ -65,10 +65,11 @@ export function errorHandler(
       field: e.path.join('.'),
       message: e.message,
     }));
+    const firstErrorMessage = errorDetails[0]?.message || 'Validation error';
     res.status(422).json({
       success: false,
-      message: 'Validation error',
-      detail: 'Validation error',
+      message: firstErrorMessage,
+      detail: firstErrorMessage,
       errors: errorDetails,
     });
     return;

@@ -3,7 +3,12 @@ import { GPSLocationSchema } from './location.schema';
 
 export const PartnerRegistrationSchema = z.object({
   body: z.object({
-    vehicle_type: z.string().min(1, 'Vehicle type is required'),
+    vehicle_type: z.preprocess(
+      (val) => (typeof val === 'string' ? val.toLowerCase().trim() : val),
+      z.enum(['bicycle', 'walking'], {
+        errorMap: () => ({ message: 'Vehicle type must be one of: bicycle, walking' }),
+      })
+    ),
     vehicle_number: z.string().optional(),
     driving_license_number: z.string().optional(),
     driving_license_url: z.string().optional(),

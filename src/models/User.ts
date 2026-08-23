@@ -18,6 +18,11 @@ export enum PartnerVerificationStatus {
   REJECTED = 'rejected',
 }
 
+export enum VehicleType {
+  BICYCLE = 'bicycle',
+  WALKING = 'walking',
+}
+
 export interface IGPSLocation {
   latitude: number;
   longitude: number;
@@ -78,7 +83,7 @@ const GPSLocationSchema = new Schema(
 
 const PartnerProfileSchema = new Schema(
   {
-    vehicle_type: { type: String },
+    vehicle_type: { type: String, enum: Object.values(VehicleType) },
     vehicle_number: { type: String },
     driving_license_number: { type: String },
     driving_license_url: { type: String },

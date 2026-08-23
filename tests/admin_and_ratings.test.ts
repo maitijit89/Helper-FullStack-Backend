@@ -39,7 +39,7 @@ describe('Admin Management, Ratings & Feedback Integration Tests', () => {
       is_gps_enabled: true,
       location: { latitude: 12.9716, longitude: 77.5946 },
       partner_profile: {
-        vehicle_type: 'Bike',
+        vehicle_type: 'bicycle',
         vehicle_number: 'KA-01-1234',
         verification_status: PartnerVerificationStatus.APPROVED,
         is_online: true,
@@ -200,7 +200,7 @@ describe('Admin Management, Ratings & Feedback Integration Tests', () => {
         role: UserRole.PARTNER,
         is_active: true,
         partner_profile: {
-          vehicle_type: 'Scooter',
+          vehicle_type: 'walking',
           vehicle_number: 'KA-05-9999',
           verification_status: PartnerVerificationStatus.PENDING,
           is_online: false,

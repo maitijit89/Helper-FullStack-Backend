@@ -210,5 +210,55 @@ describe('Auth API Integration Tests', () => {
 
     expect(res.status).toBe(422);
     expect(res.body.success).toBe(false);
+    expect(res.body.message).toBe('Vehicle type must be one of: bicycle, walking');
+  });
+
+  it('should reject partner registration with invalid vehicle_type like motorcycle', async () => {
+    const otpRes = await otpService.sendOTP('partner_invalid_veh@example.com', OTPPurpose.REGISTRATION);
+    const reg = await request(app)
+      .post('/api/v1/auth/register')
+      .send({
+        email: 'partner_invalid_veh@example.com',
+        password: 'password123',
+        full_name: 'Invalid Vehicle Partner',
+        code: otpRes.code,
+      });
+    const token = reg.body.data.tokens.access_token;
+
+    const res = await request(app)
+      .post('/api/v1/partner/register')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        vehicle_type: 'motorcycle',
+      });
+
+    expect(res.status).toBe(422);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toBe('Vehicle type must be one of: bicycle, walking');
+  });
+
+  it('should accept partner registration with bicycle or walking', async () => {
+    const otpRes = await otpService.sendOTP('partner_bicycle@example.com', OTPPurpose.REGISTRATION);
+    const reg = await request(app)
+      .post('/api/v1/auth/register')
+      .send({
+        email: 'partner_bicycle@example.com',
+        password: 'password123',
+        full_name: 'Bicycle Partner',
+        code: otpRes.code,
+      });
+    const token = reg.body.data.tokens.access_token;
+
+    const res = await request(app)
+      .post('/api/v1/partner/register')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        vehicle_type: 'bicycle',
+        vehicle_number: 'N/A',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.partner_profile.vehicle_type).toBe('bicycle');
   });
 });
