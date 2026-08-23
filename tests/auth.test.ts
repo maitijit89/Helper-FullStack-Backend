@@ -254,7 +254,6 @@ describe('Auth API Integration Tests', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({
         vehicle_type: 'bicycle',
-        vehicle_number: 'N/A',
       });
 
     expect(res.status).toBe(200);

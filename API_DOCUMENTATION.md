@@ -987,9 +987,7 @@
 ```json
 // Request Body
 {
-  "vehicle_type": "bicycle", // "bicycle" | "walking"
-  "vehicle_number": "DL-01-AB-1234",
-  "driving_license_number": "DL-9876543210123"
+  "vehicle_type": "bicycle" // "bicycle" | "walking"
 }
 
 // Response (200 OK)
@@ -1001,7 +999,6 @@
     "role": "partner",
     "partner_profile": {
       "vehicle_type": "bicycle",
-      "vehicle_number": "DL-01-AB-1234",
       "verification_status": "pending",
       "is_online": false
     }

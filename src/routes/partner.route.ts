@@ -1,17 +1,54 @@
-import { Router, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, AuthenticatedRequest, requirePartnerApproved, requireActiveGPS } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { PartnerRegistrationSchema, PartnerLocationUpdateSchema, PartnerStatusToggleSchema } from '../schemas/partner.schema';
+import { LoginSchema } from '../schemas/auth.schema';
 import { User, UserRole, PartnerVerificationStatus } from '../models/User';
 import { Order, OrderStatus } from '../models/Order';
 import { dispatchEngine } from '../services/dispatch.service';
 import { walletService } from '../services/wallet.service';
 import { googleSheetsService } from '../services/googleSheets.service';
+import { authService } from '../services/auth.service';
+import { authRateLimiter } from '../middlewares/rateLimiter';
 import { memoryUpload } from '../middlewares/upload';
 import { s3Service } from '../services/s3.service';
 import { BadRequestException, NotFoundException } from '../middlewares/errorHandler';
 
 const router = Router();
+
+// Partner Login endpoint (POST /api/v1/partner/login)
+router.post('/login', authRateLimiter, validate(LoginSchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await authService.login(req.body);
+    res.status(200).json({
+      success: true,
+      message: 'Partner login successful',
+      data: {
+        user: {
+          id: result.user._id,
+          email: result.user.email,
+          full_name: result.user.full_name,
+          role: result.user.role,
+          partner_profile: result.user.partner_profile,
+        },
+        tokens: result.tokens,
+        access_token: result.tokens.access_token,
+        refresh_token: result.tokens.refresh_token,
+        token_type: result.tokens.token_type,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get Current Partner Profile (GET /api/v1/partner/profile & GET /api/v1/partner/me)
+router.get(['/profile', '/me'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  res.status(200).json({
+    success: true,
+    data: req.user,
+  });
+});
 
 // Partner onboarding / profile submission
 router.post('/register', authenticate, validate(PartnerRegistrationSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {

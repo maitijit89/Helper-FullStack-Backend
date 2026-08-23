@@ -58,4 +58,28 @@ describe('Delivery Partner Lifecycle Tests', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.is_online).toBe(false);
   });
+
+  it('should allow partner login via POST /api/v1/partner/login', async () => {
+    const res = await request(app)
+      .post('/api/v1/partner/login')
+      .send({
+        email: 'partner@example.com',
+        password: 'password123',
+      });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.access_token).toBeDefined();
+    expect(res.body.data.user.role).toBe(UserRole.PARTNER);
+  });
+
+  it('should fetch partner profile via GET /api/v1/partner/profile', async () => {
+    const res = await request(app)
+      .get('/api/v1/partner/profile')
+      .set('Authorization', `Bearer ${partnerToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.email).toBe('partner@example.com');
+  });
 });

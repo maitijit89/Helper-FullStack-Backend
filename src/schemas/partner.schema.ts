@@ -9,8 +9,6 @@ export const PartnerRegistrationSchema = z.object({
         errorMap: () => ({ message: 'Vehicle type must be one of: bicycle, walking' }),
       })
     ),
-    vehicle_number: z.string().optional(),
-    driving_license_number: z.string().optional(),
     driving_license_url: z.string().optional(),
     aadhaar_number: z.string().optional(),
     aadhaar_url: z.string().optional(),
