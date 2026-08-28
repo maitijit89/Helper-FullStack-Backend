@@ -182,6 +182,8 @@ router.post('/partners/:user_id/verify', validate(VerifyPartnerSchema), async (r
       vehicle_type: user.partner_profile.vehicle_type,
       vehicle_number: user.partner_profile.vehicle_number,
       status: user.partner_profile.verification_status,
+      pan_card_url: user.partner_profile.pan_card_url,
+      aadhaar_url: user.partner_profile.aadhaar_url,
       created_at: user.created_at,
     });
 

@@ -90,7 +90,9 @@ router.post('/register', authenticate, validate(PartnerRegistrationSchema), asyn
       vehicle_type: user.partner_profile?.vehicle_type,
       vehicle_number: user.partner_profile?.vehicle_number,
       status: PartnerVerificationStatus.PENDING,
-      created_at: new Date(),
+      pan_card_url: user.partner_profile?.pan_card_url,
+      aadhaar_url: user.partner_profile?.aadhaar_url,
+      created_at: user.created_at || new Date(),
     });
 
     res.status(200).json({
@@ -142,6 +144,20 @@ router.post(
 
       user.touch();
       await user.save();
+
+      // Sync uploaded documents to Google Sheets in background
+      googleSheetsService.exportPartnerApplication({
+        user_id: user._id.toString(),
+        email: user.email,
+        full_name: user.full_name,
+        phone: user.phone,
+        vehicle_type: user.partner_profile?.vehicle_type,
+        vehicle_number: user.partner_profile?.vehicle_number,
+        status: user.partner_profile?.verification_status || PartnerVerificationStatus.PENDING,
+        pan_card_url: user.partner_profile?.pan_card_url,
+        aadhaar_url: user.partner_profile?.aadhaar_url,
+        created_at: user.created_at || new Date(),
+      }).catch(() => {});
 
       res.status(200).json({
         success: true,
