@@ -37,11 +37,77 @@ class AuthService {
   async register(data: RegisterDTO): Promise<{ user: IUser; tokens: AuthTokens }> {
     const cleanEmail = data.email.toLowerCase().trim();
     const existing = await User.findOne({ email: cleanEmail });
+    const otpCode = data.code || data.otp;
+    const requestedRole = data.role || UserRole.USER;
+    const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
+
     if (existing) {
-      throw new ConflictException('Email already registered');
+      const existingRoles =
+        existing.roles && existing.roles.length > 0 ? existing.roles : [existing.role || UserRole.USER];
+
+      const alreadyHasRole = existingRoles.includes(requestedRole) || existing.role === UserRole.SUPER;
+
+      if (alreadyHasRole) {
+        throw new ConflictException(`Email already registered as a ${existing.getAccountType()} account`);
+      }
+
+      if (!otpCode) {
+        throw new BadRequestException('OTP verification code is required to link and upgrade your account');
+      }
+
+      await otpService.verifyOTP(cleanEmail, otpCode, OTPPurpose.REGISTRATION);
+
+      if (!existingRoles.includes(requestedRole)) {
+        existingRoles.push(requestedRole);
+      }
+      existing.roles = Array.from(new Set(existingRoles));
+
+      if (existing.roles.includes(UserRole.USER) && existing.roles.includes(UserRole.PARTNER)) {
+        existing.role = UserRole.SUPER;
+      }
+
+      if (data.full_name && !existing.full_name) existing.full_name = data.full_name;
+      if (data.phone && !existing.phone) existing.phone = data.phone;
+      if (data.dob && !existing.dob) existing.dob = data.dob;
+      if (data.gender && !existing.gender) existing.gender = data.gender;
+      if (data.college && !existing.college) existing.college = data.college;
+      if (data.address && !existing.address) existing.address = data.address;
+
+      if (data.password && !existing.hashed_password) {
+        existing.hashed_password = await hashPassword(data.password);
+      }
+
+      if (requestedRole === UserRole.PARTNER || existing.roles.includes(UserRole.PARTNER)) {
+        if (!existing.partner_profile) {
+          existing.partner_profile = {
+            verification_status: PartnerVerificationStatus.PENDING,
+            is_online: false,
+          };
+        }
+        const existingWallet = await PartnerWallet.findOne({ partner_id: existing._id.toString() });
+        if (!existingWallet) {
+          const wallet = new PartnerWallet({
+            partner_id: existing._id.toString(),
+            total_balance: 0,
+            pending_withdrawal_balance: 0,
+            total_withdrawn: 0,
+          });
+          await wallet.save();
+        }
+      }
+
+      existing.touch();
+      await existing.save();
+
+      const tokens = this.generateAuthTokens(
+        existing._id.toString(),
+        existing.role,
+        existing.roles,
+        existing.getAccountType()
+      );
+      return { user: existing, tokens };
     }
 
-    const otpCode = data.code || data.otp;
     if (!otpCode) {
       throw new BadRequestException('OTP verification code is required to complete registration');
     }
@@ -49,8 +115,8 @@ class AuthService {
     await otpService.verifyOTP(cleanEmail, otpCode, OTPPurpose.REGISTRATION);
 
     const hashedPassword = data.password ? await hashPassword(data.password) : undefined;
-    const isSuperuser = cleanEmail === env.ADMIN_EMAIL.toLowerCase();
-    const role = isSuperuser ? UserRole.ADMIN : data.role || UserRole.USER;
+    const role = isSuperuser ? UserRole.ADMIN : requestedRole;
+    const roles = isSuperuser ? [UserRole.ADMIN] : [role];
 
     const user = new User({
       email: cleanEmail,
@@ -58,6 +124,7 @@ class AuthService {
       full_name: data.full_name,
       phone: data.phone,
       role,
+      roles,
       dob: data.dob,
       gender: data.gender,
       college: data.college,
@@ -87,7 +154,7 @@ class AuthService {
       await wallet.save();
     }
 
-    const tokens = this.generateAuthTokens(user._id.toString(), user.role);
+    const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
     return { user, tokens };
   }
 
@@ -128,7 +195,7 @@ class AuthService {
         await user.save();
       }
 
-      const tokens = this.generateAuthTokens(user._id.toString(), user.role);
+      const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
       return { user, tokens };
     }
 
@@ -156,7 +223,7 @@ class AuthService {
         throw new UnauthorizedException('Incorrect email or password');
       }
 
-      const tokens = this.generateAuthTokens(user._id.toString(), user.role);
+      const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
       return { user, tokens };
     }
 
@@ -185,7 +252,7 @@ class AuthService {
       await user.save();
     }
 
-    const tokens = this.generateAuthTokens(user._id.toString(), user.role);
+    const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
     return {
       user,
       tokens,
@@ -205,7 +272,7 @@ class AuthService {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      return this.generateAuthTokens(user._id.toString(), user.role);
+      return this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
@@ -243,10 +310,15 @@ class AuthService {
     return { message: 'Password has been reset successfully.' };
   }
 
-  generateAuthTokens(userId: string, role: UserRole): AuthTokens {
+  generateAuthTokens(
+    userId: string,
+    role: string = UserRole.USER,
+    roles?: string[],
+    accountType?: string
+  ): AuthTokens {
     return {
-      access_token: createAccessToken(userId, role),
-      refresh_token: createRefreshToken(userId, role),
+      access_token: createAccessToken(userId, role, undefined, roles, accountType),
+      refresh_token: createRefreshToken(userId, role, undefined, roles, accountType),
       token_type: 'bearer',
     };
   }

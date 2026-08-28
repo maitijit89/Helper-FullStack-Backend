@@ -5,10 +5,14 @@ import { WithdrawalRequest, WithdrawalStatus } from '../models/WithdrawalRequest
 
 class AnalyticsService {
   async getAdminDashboardStats(): Promise<any> {
-    const totalUsers = await User.countDocuments({ role: UserRole.USER });
-    const totalPartners = await User.countDocuments({ role: UserRole.PARTNER });
+    const totalUsers = await User.countDocuments({
+      $or: [{ role: { $in: [UserRole.USER, UserRole.SUPER] } }, { roles: UserRole.USER }],
+    });
+    const totalPartners = await User.countDocuments({
+      $or: [{ role: { $in: [UserRole.PARTNER, UserRole.SUPER] } }, { roles: UserRole.PARTNER }],
+    });
     const onlinePartners = await User.countDocuments({
-      role: UserRole.PARTNER,
+      $or: [{ role: { $in: [UserRole.PARTNER, UserRole.SUPER] } }, { roles: UserRole.PARTNER }],
       is_active: true,
       'partner_profile.is_online': true,
     });

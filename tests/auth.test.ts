@@ -259,5 +259,131 @@ describe('Auth API Integration Tests', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.data.partner_profile.vehicle_type).toBe('bicycle');
+    expect(res.body.data.account_type).toBe('super');
+  });
+
+  describe('Multi-Role & Super Account Tests', () => {
+    it('should assign account_type: "user" when user only registers on user portal', async () => {
+      const email = 'only_user@example.com';
+      const otpRes = await otpService.sendOTP(email, OTPPurpose.REGISTRATION);
+      const res = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'password123',
+          full_name: 'Only User',
+          code: otpRes.code,
+          role: 'user',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.user.role).toBe('user');
+      expect(res.body.data.user.roles).toContain('user');
+      expect(res.body.data.user.account_type).toBe('user');
+      expect(res.body.data.user.is_super_account).toBe(false);
+    });
+
+    it('should assign account_type: "partner" when partner only registers on partner portal', async () => {
+      const email = 'only_partner@example.com';
+      const otpRes = await otpService.sendOTP(email, OTPPurpose.REGISTRATION);
+      const res = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'password123',
+          full_name: 'Only Partner',
+          code: otpRes.code,
+          role: 'partner',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.user.role).toBe('partner');
+      expect(res.body.data.user.roles).toContain('partner');
+      expect(res.body.data.user.account_type).toBe('partner');
+      expect(res.body.data.user.is_super_account).toBe(false);
+    });
+
+    it('should upgrade existing User to Super Account when registering on Partner portal without 409 error', async () => {
+      const email = 'dual_user_to_partner@example.com';
+
+      // Step 1: Register on User portal
+      const otpUser = await otpService.sendOTP(email, OTPPurpose.REGISTRATION);
+      const userRes = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'password123',
+          full_name: 'Dual Account Person',
+          code: otpUser.code,
+          role: 'user',
+        });
+      expect(userRes.status).toBe(201);
+      expect(userRes.body.data.user.account_type).toBe('user');
+
+      // Step 2: Same email registers on Partner portal
+      const otpPartner = await otpService.sendOTP(email, OTPPurpose.REGISTRATION);
+      const partnerRes = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          code: otpPartner.code,
+          role: 'partner',
+        });
+
+      // Should succeed seamlessly without 409 Conflict
+      expect(partnerRes.status).toBe(201);
+      expect(partnerRes.body.success).toBe(true);
+      expect(partnerRes.body.data.user.role).toBe('super');
+      expect(partnerRes.body.data.user.roles).toEqual(expect.arrayContaining(['user', 'partner']));
+      expect(partnerRes.body.data.user.account_type).toBe('super');
+      expect(partnerRes.body.data.user.is_super_account).toBe(true);
+
+      // Verify login returns Super Account
+      const loginRes = await request(app)
+        .post('/api/v1/auth/login')
+        .send({
+          email,
+          password: 'password123',
+        });
+      expect(loginRes.status).toBe(200);
+      expect(loginRes.body.data.user.role).toBe('super');
+      expect(loginRes.body.data.user.account_type).toBe('super');
+      expect(loginRes.body.data.user.is_super_account).toBe(true);
+    });
+
+    it('should upgrade existing Partner to Super Account when registering on User portal without 409 error', async () => {
+      const email = 'dual_partner_to_user@example.com';
+
+      // Step 1: Register on Partner portal
+      const otpPartner = await otpService.sendOTP(email, OTPPurpose.REGISTRATION);
+      const partnerRes = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          password: 'password123',
+          full_name: 'Partner Person',
+          code: otpPartner.code,
+          role: 'partner',
+        });
+      expect(partnerRes.status).toBe(201);
+      expect(partnerRes.body.data.user.account_type).toBe('partner');
+
+      // Step 2: Same email registers on User portal
+      const otpUser = await otpService.sendOTP(email, OTPPurpose.REGISTRATION);
+      const userRes = await request(app)
+        .post('/api/v1/auth/register')
+        .send({
+          email,
+          code: otpUser.code,
+          role: 'user',
+        });
+
+      expect(userRes.status).toBe(201);
+      expect(userRes.body.success).toBe(true);
+      expect(userRes.body.data.user.role).toBe('super');
+      expect(userRes.body.data.user.roles).toEqual(expect.arrayContaining(['partner', 'user']));
+      expect(userRes.body.data.user.account_type).toBe('super');
+      expect(userRes.body.data.user.is_super_account).toBe(true);
+    });
   });
 });

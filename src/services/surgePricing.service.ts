@@ -50,7 +50,7 @@ class SurgePricingEngine {
     });
 
     const onlinePartnersCount = await User.countDocuments({
-      role: UserRole.PARTNER,
+      $or: [{ role: { $in: [UserRole.PARTNER, UserRole.SUPER] } }, { roles: UserRole.PARTNER }],
       is_active: true,
       'partner_profile.is_online': true,
     });

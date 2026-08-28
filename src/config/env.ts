@@ -19,7 +19,7 @@ function parseCorsOrigins(val?: string): string[] {
 }
 
 export const env = {
-  PROJECT_NAME: process.env.PROJECT_NAME || 'Helper FullStack Backend (Node/Express/TS)',
+  PROJECT_NAME: process.env.PROJECT_NAME || 'Helping Services',
   VERSION: process.env.VERSION || '1.0.0',
   API_V1_STR: process.env.API_V1_STR || '/api/v1',
   ENVIRONMENT: process.env.ENVIRONMENT || 'development',

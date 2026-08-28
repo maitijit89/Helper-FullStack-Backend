@@ -122,7 +122,9 @@ router.delete('/users/:user_id', async (req: AuthenticatedRequest, res: Response
 router.get('/partners', validate(AdminPartnersQuerySchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const { status, limit = 50, skip = 0 } = req.query;
-    const filter: any = { role: UserRole.PARTNER };
+    const filter: any = {
+      $or: [{ role: { $in: [UserRole.PARTNER, UserRole.SUPER] } }, { roles: UserRole.PARTNER }],
+    };
     if (status) {
       filter['partner_profile.verification_status'] = status;
     }
@@ -149,7 +151,14 @@ router.post('/partners/:user_id/verify', validate(VerifyPartnerSchema), async (r
     const { status, rejection_reason } = req.body;
 
     const user = await User.findById(req.params.user_id);
-    if (!user || user.role !== UserRole.PARTNER || !user.partner_profile) {
+    const isPartner =
+      user &&
+      (user.role === UserRole.PARTNER ||
+        user.role === UserRole.SUPER ||
+        (user.roles && user.roles.includes(UserRole.PARTNER)) ||
+        !!user.partner_profile);
+
+    if (!user || !isPartner || !user.partner_profile) {
       throw new NotFoundException('Partner not found');
     }
 
@@ -237,7 +246,12 @@ router.post('/orders/:order_id/assign-partner', async (req: AuthenticatedRequest
     }
 
     const partner = await User.findById(partner_id);
-    if (!partner || partner.role !== UserRole.PARTNER) {
+    const isPartner =
+      partner &&
+      (partner.role === UserRole.PARTNER ||
+        partner.role === UserRole.SUPER ||
+        (partner.roles && partner.roles.includes(UserRole.PARTNER)));
+    if (!partner || !isPartner) {
       throw new NotFoundException('Delivery partner not found');
     }
 

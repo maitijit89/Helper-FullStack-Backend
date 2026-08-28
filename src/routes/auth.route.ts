@@ -25,13 +25,18 @@ router.post('/register', authRateLimiter, validate(RegisterSchema), async (req: 
     const result = await authService.register(req.body);
     res.status(201).json({
       success: true,
-      message: 'User registered successfully',
+      message: result.user.role === UserRole.SUPER
+        ? 'Account upgraded to Super Account successfully'
+        : 'User registered successfully',
       data: {
         user: {
           id: result.user._id,
           email: result.user.email,
           full_name: result.user.full_name,
           role: result.user.role,
+          roles: result.user.roles,
+          account_type: result.user.getAccountType(),
+          is_super_account: result.user.is_super_account,
         },
         tokens: result.tokens,
       },
@@ -53,6 +58,9 @@ router.post('/login', authRateLimiter, validate(LoginSchema), async (req: Reques
           email: result.user.email,
           full_name: result.user.full_name,
           role: result.user.role,
+          roles: result.user.roles,
+          account_type: result.user.getAccountType(),
+          is_super_account: result.user.is_super_account,
           partner_profile: result.user.partner_profile,
         },
         tokens: result.tokens,
@@ -130,6 +138,9 @@ router.post('/otp/verify', authRateLimiter, validate(VerifyOTPSchema), async (re
           email: result.user.email,
           full_name: result.user.full_name,
           role: result.user.role,
+          roles: result.user.roles,
+          account_type: result.user.getAccountType(),
+          is_super_account: result.user.is_super_account,
           partner_profile: result.user.partner_profile,
         },
         tokens: result.tokens,
@@ -240,7 +251,7 @@ router.post('/admin/verify-otp', authRateLimiter, async (req: Request, res: Resp
       await user.save();
     }
 
-    const tokens = authService.generateAuthTokens(user._id.toString(), user.role);
+    const tokens = authService.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
 
     res.status(200).json({
       success: true,
@@ -255,6 +266,9 @@ router.post('/admin/verify-otp', authRateLimiter, async (req: Request, res: Resp
           email: user.email,
           full_name: user.full_name,
           role: user.role,
+          roles: user.roles,
+          account_type: user.getAccountType(),
+          is_super_account: user.is_super_account,
         },
       },
     });

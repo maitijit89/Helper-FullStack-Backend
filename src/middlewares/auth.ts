@@ -90,7 +90,15 @@ export function requireRoles(roles: UserRole[]) {
     if (req.user.is_superuser) {
       return next();
     }
-    if (!roles.includes(req.user.role)) {
+    const userRoles = req.user.roles && req.user.roles.length > 0 ? req.user.roles : [req.user.role];
+    const isSuper = req.user.role === UserRole.SUPER || req.user.getAccountType() === 'super';
+
+    const hasRole =
+      roles.includes(req.user.role) ||
+      userRoles.some((r) => roles.includes(r as UserRole)) ||
+      (isSuper && (roles.includes(UserRole.USER) || roles.includes(UserRole.PARTNER)));
+
+    if (!hasRole) {
       return next(new ForbiddenException(`Access forbidden. Requires one of roles: ${roles.join(', ')}`));
     }
     next();
@@ -104,7 +112,14 @@ export function requirePartnerApproved(req: AuthenticatedRequest, res: Response,
   if (req.user.is_superuser) {
     return next();
   }
-  if (req.user.role !== UserRole.PARTNER) {
+  const isPartner =
+    req.user.role === UserRole.PARTNER ||
+    req.user.role === UserRole.SUPER ||
+    (req.user.roles && req.user.roles.includes(UserRole.PARTNER)) ||
+    req.user.getAccountType() === 'super' ||
+    req.user.getAccountType() === 'partner';
+
+  if (!isPartner) {
     return next(new ForbiddenException('Access restricted to delivery partners'));
   }
   if (!req.user.partner_profile) {

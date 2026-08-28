@@ -139,6 +139,50 @@ describe('Specialized Services & System Integration Tests', () => {
       expect(typeof res.body.data.reply).toBe('string');
       expect(res.body.data.reply.length).toBeGreaterThan(5);
     });
+
+    it('should accept frontend history format with parts array', async () => {
+      const res = await request(app)
+        .post('/api/v1/ai/chat')
+        .send({
+          prompt: 'What snacks do you have?',
+          history: [
+            {
+              role: 'model',
+              parts: [{ text: "👋 Hi! I'm your Helper campus AI assistant." }],
+            },
+            {
+              role: 'user',
+              parts: [{ text: 'Hello' }],
+            },
+          ],
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(typeof res.body.data.reply).toBe('string');
+    });
+
+    it('should accept message alias instead of prompt', async () => {
+      const res = await request(app)
+        .post('/api/v1/ai/chat')
+        .send({
+          message: 'How much for spiral binding?',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(typeof res.body.data.reply).toBe('string');
+    });
+
+    it('should return 422 validation error when prompt is empty or missing', async () => {
+      const res = await request(app)
+        .post('/api/v1/ai/chat')
+        .send({});
+
+      expect(res.status).toBe(422);
+      expect(res.body.success).toBe(false);
+      expect(res.body.errors).toBeDefined();
+    });
   });
 
   describe('Support Tickets Flow', () => {

@@ -4,6 +4,7 @@ export enum UserRole {
   USER = 'user',
   PARTNER = 'partner',
   ADMIN = 'admin',
+  SUPER = 'super',
 }
 
 export enum Gender {
@@ -61,6 +62,9 @@ export interface IUser extends Document {
   college?: string;
   address?: string;
   role: UserRole;
+  roles: string[];
+  account_type: string;
+  is_super_account: boolean;
   partner_profile?: IPartnerProfile;
   location?: IGPSLocation;
   is_gps_enabled: boolean;
@@ -70,6 +74,7 @@ export interface IUser extends Document {
   created_at: Date;
   updated_at: Date;
   touch(): void;
+  getAccountType(): string;
 }
 
 const GPSLocationSchema = new Schema(
@@ -121,6 +126,7 @@ const UserSchema = new Schema<IUser>(
     college: { type: String },
     address: { type: String },
     role: { type: String, enum: Object.values(UserRole), default: UserRole.USER, index: true },
+    roles: [{ type: String, enum: Object.values(UserRole) }],
     partner_profile: { type: PartnerProfileSchema },
     location: { type: GPSLocationSchema },
     is_gps_enabled: { type: Boolean, default: false },
@@ -130,10 +136,13 @@ const UserSchema = new Schema<IUser>(
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
   }
 );
 
 UserSchema.index({ role: 1, is_active: 1 });
+UserSchema.index({ roles: 1, is_active: 1 });
 UserSchema.index({ role: 1, is_active: 1, is_gps_enabled: 1 });
 UserSchema.index({ created_at: -1 });
 
@@ -141,4 +150,48 @@ UserSchema.methods.touch = function () {
   this.updated_at = new Date();
 };
 
+UserSchema.methods.getAccountType = function (this: IUser): string {
+  if (this.is_superuser || this.role === UserRole.ADMIN || (this.roles && this.roles.includes(UserRole.ADMIN))) {
+    return 'admin';
+  }
+  const hasPartnerRole = (this.roles && this.roles.includes(UserRole.PARTNER)) || this.role === UserRole.PARTNER;
+  const hasPartnerProfile = !!(this.partner_profile && (this.partner_profile.vehicle_type || this.partner_profile.verification_status));
+  const isPartner = hasPartnerRole || hasPartnerProfile;
+
+  const hasUserRole = (this.roles && this.roles.includes(UserRole.USER)) || this.role === UserRole.USER || (!this.roles?.length && this.role !== UserRole.PARTNER);
+  const isUser = hasUserRole;
+
+  if ((isUser && isPartner) || this.role === UserRole.SUPER) {
+    return 'super';
+  }
+  if (isPartner) {
+    return 'partner';
+  }
+  return 'user';
+};
+
+UserSchema.virtual('account_type').get(function (this: IUser) {
+  return this.getAccountType();
+});
+
+UserSchema.virtual('is_super_account').get(function (this: IUser) {
+  return this.getAccountType() === 'super';
+});
+
+UserSchema.pre('save', function (next) {
+  if (!this.roles || this.roles.length === 0) {
+    if (this.role === UserRole.SUPER) {
+      this.roles = [UserRole.USER, UserRole.PARTNER];
+    } else {
+      this.roles = [this.role || UserRole.USER];
+    }
+  } else {
+    if (this.roles.includes(UserRole.USER) && this.roles.includes(UserRole.PARTNER)) {
+      this.role = UserRole.SUPER;
+    }
+  }
+  next();
+});
+
 export const User = mongoose.model<IUser>('User', UserSchema, 'users');
+

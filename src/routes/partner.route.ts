@@ -29,6 +29,9 @@ router.post('/login', authRateLimiter, validate(LoginSchema), async (req: Reques
           email: result.user.email,
           full_name: result.user.full_name,
           role: result.user.role,
+          roles: result.user.roles,
+          account_type: result.user.getAccountType(),
+          is_super_account: result.user.is_super_account,
           partner_profile: result.user.partner_profile,
         },
         tokens: result.tokens,
@@ -54,7 +57,18 @@ router.get(['/profile', '/me'], authenticate, async (req: AuthenticatedRequest, 
 router.post('/register', authenticate, validate(PartnerRegistrationSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const user = req.user!;
-    user.role = UserRole.PARTNER;
+    const currentRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role || UserRole.USER];
+    if (!currentRoles.includes(UserRole.PARTNER)) {
+      currentRoles.push(UserRole.PARTNER);
+    }
+    user.roles = Array.from(new Set(currentRoles));
+
+    if (user.roles.includes(UserRole.USER) && user.roles.includes(UserRole.PARTNER)) {
+      user.role = UserRole.SUPER;
+    } else {
+      user.role = UserRole.PARTNER;
+    }
+
     const existingProfile = user.partner_profile ? JSON.parse(JSON.stringify(user.partner_profile)) : {};
     user.partner_profile = {
       ...existingProfile,
@@ -81,7 +95,9 @@ router.post('/register', authenticate, validate(PartnerRegistrationSchema), asyn
 
     res.status(200).json({
       success: true,
-      message: 'Partner application submitted successfully. Pending admin approval.',
+      message: user.role === UserRole.SUPER
+        ? 'Partner application submitted successfully. Your account is now a Super Account.'
+        : 'Partner application submitted successfully. Pending admin approval.',
       data: user,
     });
   } catch (err) {

@@ -35,9 +35,14 @@ class WebSocketManager {
           ws.userId = payload.sub;
           ws.role = payload.role;
 
-          if (payload.role === UserRole.PARTNER) {
+          const isPartner =
+            payload.role === UserRole.PARTNER ||
+            payload.role === UserRole.SUPER ||
+            (payload.roles && payload.roles.includes(UserRole.PARTNER));
+
+          if (isPartner) {
             this.partnerSockets.set(payload.sub, ws);
-            logger.info(`Delivery Partner connected via WS: ${payload.sub}`);
+            logger.info(`Delivery Partner / Super Account connected via WS: ${payload.sub}`);
           } else {
             if (!this.customerSockets.has(payload.sub)) {
               this.customerSockets.set(payload.sub, new Set());
@@ -61,7 +66,7 @@ class WebSocketManager {
 
       ws.on('close', () => {
         if (ws.userId) {
-          if (ws.role === UserRole.PARTNER) {
+          if (ws.role === UserRole.PARTNER || ws.role === UserRole.SUPER) {
             this.partnerSockets.delete(ws.userId);
           } else {
             const userSet = this.customerSockets.get(ws.userId);
@@ -89,7 +94,8 @@ class WebSocketManager {
   }
 
   private async handleClientMessage(ws: ExtendedWebSocket, message: any) {
-    if (message.type === 'update_location' && ws.userId && ws.role === UserRole.PARTNER) {
+    const isPartner = ws.role === UserRole.PARTNER || ws.role === UserRole.SUPER;
+    if (message.type === 'update_location' && ws.userId && isPartner) {
       const { latitude, longitude, accuracy, address } = message.data || {};
       if (latitude && longitude) {
         await User.findByIdAndUpdate(ws.userId, {

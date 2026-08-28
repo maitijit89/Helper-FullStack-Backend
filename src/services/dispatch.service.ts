@@ -10,7 +10,7 @@ class DispatchEngine {
    */
   async findNearbyPartners(orderLocation: Coordinates, radiusKm: number = 1.0): Promise<IUser[]> {
     const activePartners = await User.find({
-      role: UserRole.PARTNER,
+      $or: [{ role: { $in: [UserRole.PARTNER, UserRole.SUPER] } }, { roles: UserRole.PARTNER }],
       is_active: true,
       is_gps_enabled: true,
       'partner_profile.verification_status': PartnerVerificationStatus.APPROVED,

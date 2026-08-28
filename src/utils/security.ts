@@ -7,6 +7,8 @@ import { redisService } from '../services/redis.service';
 export interface TokenPayload {
   sub: string;
   role: string;
+  roles?: string[];
+  account_type?: string;
   type: 'access' | 'refresh';
   exp?: number;
   iat?: number;
@@ -32,11 +34,19 @@ export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, salt);
 }
 
-export function createAccessToken(subject: string, role: UserRole = UserRole.USER, expiresInMinutes?: number): string {
+export function createAccessToken(
+  subject: string,
+  role: string = UserRole.USER,
+  expiresInMinutes?: number,
+  roles?: string[],
+  accountType?: string
+): string {
   const expiry = (expiresInMinutes ?? env.ACCESS_TOKEN_EXPIRE_MINUTES) * 60;
   const payload: TokenPayload = {
     sub: subject,
     role: role,
+    roles: roles,
+    account_type: accountType,
     type: 'access',
   };
   return jwt.sign(payload, env.SECRET_KEY, {
@@ -45,11 +55,19 @@ export function createAccessToken(subject: string, role: UserRole = UserRole.USE
   });
 }
 
-export function createRefreshToken(subject: string, role: UserRole = UserRole.USER, expiresInDays?: number): string {
+export function createRefreshToken(
+  subject: string,
+  role: string = UserRole.USER,
+  expiresInDays?: number,
+  roles?: string[],
+  accountType?: string
+): string {
   const expiry = (expiresInDays ?? env.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 60 * 60;
   const payload: TokenPayload = {
     sub: subject,
     role: role,
+    roles: roles,
+    account_type: accountType,
     type: 'refresh',
   };
   return jwt.sign(payload, env.SECRET_KEY, {
