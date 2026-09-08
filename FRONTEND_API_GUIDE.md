@@ -383,6 +383,72 @@ ws.onmessage = (event) => {
   } else if (eventName === 'order_status_updated') {
     // Order state update (e.g. out for delivery, delivered)
     console.log('Order Update:', data);
+  } else if (eventName === 'app_status_changed') {
+    // Admin stopped or resumed the application
+    console.log('App Status Changed:', data);
+    if (data.user_app?.is_stopped) {
+      // Trigger full-screen maintenance overlay for customer app
+    }
+    if (data.partner_app?.is_stopped) {
+      // Trigger full-screen maintenance overlay for partner app
+    }
   }
 };
 ```
+
+---
+
+### 🛑 4.10 App Maintenance & Kill Switch Handling (`/app-control`)
+
+Client applications (Customer App and Delivery Partner App) should check the operational status upon launch or resume, and listen for the `app_status_changed` WebSocket event:
+
+#### Check Operational Status on App Launch:
+```typescript
+import { apiClient } from './apiClient';
+
+export async function checkAppAvailability(appType: 'user' | 'partner') {
+  try {
+    const res = await apiClient.get(`/app-control/status?app=${appType}`);
+    const status = res.data.data;
+    if (status.is_stopped) {
+      // Render Fullscreen Maintenance Screen
+      showMaintenanceScreen({
+        title: status.title,
+        message: status.message,
+        stoppedAt: status.stopped_at,
+      });
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('App status check error:', err);
+    return true;
+  }
+}
+```
+
+#### Handling HTTP 503 Service Unavailable Interceptions:
+Add this to your `apiClient` response interceptor:
+```typescript
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 503 && error.response?.data?.error?.is_stopped) {
+      const { title, message } = error.response.data.error;
+      showMaintenanceScreen({ title, message });
+    }
+    return Promise.reject(error);
+  }
+);
+```
+
+#### Admin Panel Operations:
+- `GET /admin/app-control`: Fetch status with audit data (`stopped_by`, timestamps).
+- `PATCH /admin/app-control`: Body `{ app: "user" | "partner" | "all", is_stopped: boolean, title?: string, message?: string }`.
+- `POST /admin/app-control/user/stop`: Shortcut to stop User App.
+- `POST /admin/app-control/user/start`: Shortcut to resume User App.
+- `POST /admin/app-control/partner/stop`: Shortcut to stop Partner App.
+- `POST /admin/app-control/partner/start`: Shortcut to resume Partner App.
+- `POST /admin/app-control/stop-all`: Emergency killswitch for both apps.
+- `POST /admin/app-control/start-all`: Resume all services.
+- **Embedded Web UI**: Admins can visually toggle apps with a single click at `/api/v1/admin/app-control/ui`.

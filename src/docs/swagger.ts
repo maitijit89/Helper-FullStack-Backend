@@ -593,5 +593,155 @@ export const swaggerDocument = {
         },
       },
     },
+    '/app-control/status': {
+      get: {
+        tags: ['App Control & Availability'],
+        summary: 'Get User & Partner App Operational Status (Public)',
+        description: 'Used by mobile and web apps on launch/resume to check if services are running or under maintenance.',
+        security: [],
+        parameters: [
+          {
+            name: 'app',
+            in: 'query',
+            required: false,
+            schema: { type: 'string', enum: ['user', 'partner'] },
+            description: 'Optionally query status specifically for user or partner app',
+          },
+        ],
+        responses: {
+          200: {
+            description: 'Current app operational status',
+          },
+        },
+      },
+    },
+    '/admin/app-control': {
+      get: {
+        tags: ['Admin Management'],
+        summary: 'Get Detailed App Control Status (Admin Only)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Full status including stopped_by and audit timestamps' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden (Admin only)' },
+        },
+      },
+      patch: {
+        tags: ['Admin Management'],
+        summary: 'Update App Operational Status (Stop / Resume)',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['app', 'is_stopped'],
+                properties: {
+                  app: { type: 'string', enum: ['user', 'partner', 'all'] },
+                  is_stopped: { type: 'boolean' },
+                  title: { type: 'string', example: 'Scheduled Maintenance' },
+                  message: { type: 'string', example: 'We are performing scheduled maintenance and will be back shortly.' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'App status updated successfully' },
+          400: { description: 'Bad Request' },
+          401: { description: 'Unauthorized' },
+          403: { description: 'Forbidden' },
+        },
+      },
+    },
+    '/admin/app-control/user/stop': {
+      post: {
+        tags: ['Admin Management'],
+        summary: 'Stop User App (Customer App)',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  message: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'User App stopped successfully' },
+        },
+      },
+    },
+    '/admin/app-control/user/start': {
+      post: {
+        tags: ['Admin Management'],
+        summary: 'Resume User App (Customer App)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'User App resumed successfully' },
+        },
+      },
+    },
+    '/admin/app-control/partner/stop': {
+      post: {
+        tags: ['Admin Management'],
+        summary: 'Stop Partner App (Delivery Partner App)',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  message: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Partner App stopped successfully' },
+        },
+      },
+    },
+    '/admin/app-control/partner/start': {
+      post: {
+        tags: ['Admin Management'],
+        summary: 'Resume Partner App (Delivery Partner App)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'Partner App resumed successfully' },
+        },
+      },
+    },
+    '/admin/app-control/stop-all': {
+      post: {
+        tags: ['Admin Management'],
+        summary: 'Emergency Stop All Apps (User & Partner)',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'All apps stopped' },
+        },
+      },
+    },
+    '/admin/app-control/start-all': {
+      post: {
+        tags: ['Admin Management'],
+        summary: 'Resume All Apps',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: 'All apps resumed' },
+        },
+      },
+    },
   },
 };

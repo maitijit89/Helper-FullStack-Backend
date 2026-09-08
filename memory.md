@@ -33,6 +33,13 @@ This document serves as the persistent memory log and state repository for the *
 - **Razorpay Refunds**: `POST /api/v1/payments/razorpay/refund` and `razorpayService.refundPayment`.
 - **Partner Rating Sync**: Integrated automatic partner rating recalculation into order rating submissions and admin rating moderation.
 
+### 2.3 Admin App Control & Emergency Maintenance Mode
+- **App Control Model & Singleton**: `AppControl` document managing `user_app` and `partner_app` operational flags, custom titles, maintenance messages, and audit timestamps.
+- **High-Performance Service**: `appControlService` with 5-second in-memory cache, MongoDB persistence, Redis pub/sub synchronization, and instant real-time WebSocket broadcast (`app_status_changed`).
+- **Gatekeeper Middleware**: `checkAppStatus('user' | 'partner')` returning HTTP 503 Service Unavailable with `Retry-After: 300` and structured maintenance payload when an app is stopped. Admins (`role: 'admin'`, `is_superuser: true`) bypass blockages.
+- **Admin Endpoints & Visual Dashboard**: Full status and update APIs (`GET/PATCH /api/v1/admin/app-control`), shortcut actions (`/user/stop`, `/user/start`, `/partner/stop`, `/partner/start`, `/stop-all`, `/start-all`), public status API (`/api/v1/app-control/status`), and responsive visual dashboard at `GET /api/v1/admin/app-control/ui`.
+- **Test Coverage**: Automated integration tests in `tests/app_control.test.ts` (11 tests passing, 100% rate).
+
 ---
 
 ## 3. Active System Configuration & Environment

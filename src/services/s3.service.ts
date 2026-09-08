@@ -1,3 +1,5 @@
+import path from 'path';
+import fs from 'fs';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../config/env';
@@ -24,20 +26,37 @@ class S3Service {
     contentType: string = 'application/octet-stream'
   ): Promise<string> {
     if (!this.client || !env.AWS_STORAGE_BUCKET_NAME) {
-      logger.warn(`AWS S3 not configured. Returning local mock URL for: ${fileName}`);
-      return `/static/${fileName}`;
+      return this.saveLocalFile(fileBuffer, fileName);
     }
 
-    const key = `uploads/${Date.now()}-${fileName}`;
-    const command = new PutObjectCommand({
-      Bucket: env.AWS_STORAGE_BUCKET_NAME,
-      Key: key,
-      Body: fileBuffer,
-      ContentType: contentType,
-    });
+    try {
+      const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const key = `uploads/${Date.now()}-${cleanName}`;
+      const command = new PutObjectCommand({
+        Bucket: env.AWS_STORAGE_BUCKET_NAME,
+        Key: key,
+        Body: fileBuffer,
+        ContentType: contentType,
+      });
 
-    await this.client.send(command);
-    return `https://${env.AWS_STORAGE_BUCKET_NAME}.s3.${env.AWS_S3_REGION_NAME}.amazonaws.com/${key}`;
+      await this.client.send(command);
+      return `https://${env.AWS_STORAGE_BUCKET_NAME}.s3.${env.AWS_S3_REGION_NAME}.amazonaws.com/${key}`;
+    } catch (err: any) {
+      logger.warn(`S3 upload error: ${err.message}. Falling back to local public storage.`);
+      return this.saveLocalFile(fileBuffer, fileName);
+    }
+  }
+
+  private saveLocalFile(fileBuffer: Buffer, fileName: string): string {
+    const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const safeName = `${Date.now()}-${cleanName}`;
+    const uploadDir = path.resolve('uploads', 'products');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(uploadDir, safeName), fileBuffer);
+    logger.info(`Saved file to local public static directory: uploads/products/${safeName}`);
+    return `/static/products/${safeName}`;
   }
 
   async getPresignedUrl(key: string, expiresInSeconds: number = 3600): Promise<string> {

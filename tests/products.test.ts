@@ -155,4 +155,16 @@ describe('Products API Integration Tests', () => {
     expect(deleteRes.status).toBe(200);
     expect(deleteRes.body.message).toContain('deleted');
   });
+
+  it('should allow public access to product image via GET /api/v1/products/:id/image', async () => {
+    // 1. Assign image_url to sampleProduct
+    sampleProduct.image_url = 'https://images.unsplash.com/photo-1566478989037-eec170784d0b';
+    await sampleProduct.save();
+
+    // 2. Public request without any auth token
+    const res = await request(app).get(`/api/v1/products/${sampleProduct._id.toString()}/image`);
+
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('https://images.unsplash.com/photo-1566478989037-eec170784d0b');
+  });
 });

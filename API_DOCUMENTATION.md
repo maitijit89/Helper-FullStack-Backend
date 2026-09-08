@@ -38,6 +38,7 @@
    - [Support Ticket Triage](#38-support-ticket-triage)
    - [Rating & Review Moderation](#39-rating--review-moderation)
    - [App Feedback Management](#310-app-feedback-management)
+   - [App Control & Maintenance Mode (Stop/Resume Apps)](#311-app-control--maintenance-mode-stopresume-apps)
 4. [Real-time WebSocket Events Guide](#4-real-time-websocket-events-guide)
 
 ---
@@ -1821,6 +1822,117 @@
   "message": "Feedback deleted successfully"
 }
 ```
+
+---
+
+### 3.11 App Control & Maintenance Mode (Stop/Resume Apps)
+
+Allows administrators to stop or resume the **User (Customer) App** and **Delivery Partner App** independently or simultaneously. When stopped, requests from that app are intercepted with HTTP 503 (Service Unavailable), while admin accounts always retain access.
+
+#### Public App Status Check (Used by Client Apps on Launch)
+`GET /app-control/status`  
+`GET /app-control/status?app=user`  
+`GET /app-control/status?app=partner`
+```json
+// Response (200 OK)
+{
+  "success": true,
+  "data": {
+    "user_app": {
+      "is_stopped": false,
+      "title": "User App Under Maintenance",
+      "message": "The Customer App is currently undergoing scheduled maintenance. We will be back shortly.",
+      "stopped_at": null,
+      "stopped_by": null
+    },
+    "partner_app": {
+      "is_stopped": false,
+      "title": "Partner Deliveries Paused",
+      "message": "The Delivery Partner App is temporarily paused. Please check back shortly.",
+      "stopped_at": null,
+      "stopped_by": null
+    },
+    "updated_at": "2026-09-08T14:30:00.000Z"
+  }
+}
+```
+
+#### Get Detailed App Status (Admin Only)
+`GET /admin/app-control`  
+*Headers*: `Authorization: Bearer <ADMIN_TOKEN>`
+```json
+// Response (200 OK)
+{
+  "success": true,
+  "data": {
+    "user_app": {
+      "is_stopped": true,
+      "title": "Scheduled Maintenance",
+      "message": "User app is temporarily stopped for server upgrade.",
+      "stopped_at": "2026-09-08T14:30:00.000Z",
+      "stopped_by": "admin@example.com"
+    },
+    "partner_app": {
+      "is_stopped": false,
+      "title": "Partner Deliveries Paused",
+      "message": "The Delivery Partner App is temporarily paused.",
+      "stopped_at": null,
+      "stopped_by": null
+    }
+  }
+}
+```
+
+#### Update App Control (Stop / Resume)
+`PATCH /admin/app-control`  
+*Headers*: `Authorization: Bearer <ADMIN_TOKEN>`
+```json
+// Request Body
+{
+  "app": "user", // "user" | "partner" | "all"
+  "is_stopped": true,
+  "title": "Urgent Maintenance",
+  "message": "We are fixing payment gateways. Back in 30 mins."
+}
+
+// Response (200 OK)
+{
+  "success": true,
+  "message": "Successfully stopped USER application",
+  "data": { ... }
+}
+```
+
+#### Quick Shortcuts for Single-Action Control
+*Headers*: `Authorization: Bearer <ADMIN_TOKEN>`
+- `POST /admin/app-control/user/stop` - Stop User App (optional `title`, `message` in body)
+- `POST /admin/app-control/user/start` - Resume User App
+- `POST /admin/app-control/partner/stop` - Stop Partner App (optional `title`, `message` in body)
+- `POST /admin/app-control/partner/start` - Resume Partner App
+- `POST /admin/app-control/stop-all` - Emergency Killswitch (stops both apps)
+- `POST /admin/app-control/start-all` - Resume all apps
+
+#### Intercepted Request Behavior (HTTP 503)
+When an app is stopped, non-admin client requests to protected routes receive:
+```json
+// HTTP 503 Service Unavailable
+// Header: Retry-After: 300
+{
+  "success": false,
+  "error": {
+    "code": 503,
+    "app": "user",
+    "is_stopped": true,
+    "title": "Urgent Maintenance",
+    "message": "We are fixing payment gateways. Back in 30 mins.",
+    "stopped_at": "2026-09-08T14:30:00.000Z"
+  }
+}
+```
+
+#### Embedded Web UI
+Admins can also visually monitor and toggle apps in real time at:  
+`http://localhost:8000/api/v1/admin/app-control/ui`
 
 ---
 

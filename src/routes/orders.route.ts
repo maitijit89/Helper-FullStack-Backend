@@ -11,6 +11,7 @@ import { printPricingEngine } from '../services/printPricing.service';
 import { geoService } from '../services/geo.service';
 import { wsManager } from '../services/websocket.service';
 import { BadRequestException, NotFoundException, ForbiddenException } from '../middlewares/errorHandler';
+import { checkAppStatus } from '../middlewares/appControl';
 
 const router = Router();
 
@@ -43,7 +44,7 @@ router.post('/calculate-fee', async (req: Request, res: Response, next: NextFunc
 });
 
 // 1. Create order
-router.post('/', authenticate, validate(CreateOrderSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/', authenticate, checkAppStatus('user'), validate(CreateOrderSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const customerId = req.user!._id.toString();
     const {

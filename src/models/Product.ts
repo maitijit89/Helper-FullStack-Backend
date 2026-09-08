@@ -51,4 +51,20 @@ ProductSchema.methods.touch = function () {
   this.updated_at = new Date();
 };
 
+export function formatPublicImageUrl(url?: string): string | undefined {
+  if (!url) return url;
+  const gdriveMatch = url.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?id=)([a-zA-Z0-9_-]+)/);
+  if (gdriveMatch && gdriveMatch[1]) {
+    return `https://lh3.googleusercontent.com/d/${gdriveMatch[1]}`;
+  }
+  return url;
+}
+
+ProductSchema.pre('save', function (next) {
+  if (this.image_url) {
+    this.image_url = formatPublicImageUrl(this.image_url);
+  }
+  next();
+});
+
 export const Product = mongoose.model<IProduct>('Product', ProductSchema, 'products');

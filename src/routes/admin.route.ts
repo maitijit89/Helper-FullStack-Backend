@@ -18,11 +18,15 @@ import { WithdrawalRequest, WithdrawalStatus } from '../models/WithdrawalRequest
 import { walletService } from '../services/wallet.service';
 import { googleSheetsService } from '../services/googleSheets.service';
 import { NotFoundException, BadRequestException } from '../middlewares/errorHandler';
+import appControlRouter from './appControl.route';
 
 const router = Router();
 
 // Require admin authentication for all endpoints here
 router.use(authenticate, requireAdmin);
+
+// App Control sub-router
+router.use('/app-control', appControlRouter);
 
 // 1. User & Partner Management
 router.get('/users', validate(AdminUsersQuerySchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {

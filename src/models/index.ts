@@ -8,3 +8,4 @@ export * from './Feedback';
 export * from './SupportTicket';
 export * from './PartnerWallet';
 export * from './WithdrawalRequest';
+export * from './AppControl';

@@ -18,6 +18,18 @@ router.get('/health', async (req: Request, res: Response) => {
     }
   }
 
+  let appsState = { user_app: 'running', partner_app: 'running' };
+  try {
+    const { appControlService } = await import('../services/appControl.service');
+    const status = await appControlService.getStatus();
+    appsState = {
+      user_app: status.user_app.is_stopped ? 'stopped' : 'running',
+      partner_app: status.partner_app.is_stopped ? 'stopped' : 'running',
+    };
+  } catch {
+    // Ignore error if DB is not ready during health probe
+  }
+
   res.status(200).json({
     status: 'ok',
     project: env.PROJECT_NAME,
@@ -25,6 +37,7 @@ router.get('/health', async (req: Request, res: Response) => {
     timestamp: new Date().toISOString(),
     database: dbState,
     redis: redisState,
+    apps: appsState,
   });
 });
 

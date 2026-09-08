@@ -16,25 +16,45 @@ import assignmentServiceRouter from './assignmentService.route';
 import aiChatRouter from './aiChat.route';
 import supportRouter from './support.route';
 import walletRouter from './wallet.route';
+import appControlRouter from './appControl.route';
+import { checkAppStatus } from '../middlewares/appControl';
 
 const apiRouter = Router();
 
+// Public Health & Status
 apiRouter.use('/', healthRouter);
+apiRouter.use('/app-control', appControlRouter);
+
+// Authentication & Users
 apiRouter.use('/auth', authRouter);
 apiRouter.use('/users', usersRouter);
-apiRouter.use('/partner', partnerRouter);
-apiRouter.use('/admin', adminRouter);
+
+// Delivery Partner App Services (Guarded by Partner App Status)
+apiRouter.use('/partner', checkAppStatus('partner'), partnerRouter);
+apiRouter.use('/wallet', checkAppStatus('partner'));
+apiRouter.use('/', walletRouter);
+
+// Admin Operations (Specific routes first, general /admin router after)
+apiRouter.use('/admin/app-control', appControlRouter);
 apiRouter.use('/admin/dashboard', adminDashboardRouter);
+apiRouter.use('/admin', adminRouter);
+
+// Products & Catalog
 apiRouter.use('/products', productsRouter);
+
+// Orders & Payments
 apiRouter.use('/orders', ordersRouter);
 apiRouter.use('/payments', paymentsRouter);
+
+// Ratings, Feedback & Support
 apiRouter.use('/ratings', ratingsRouter);
 apiRouter.use('/feedback', feedbackRouter);
-apiRouter.use('/cart', cartRouter);
-apiRouter.use('/print', printServiceRouter);
-apiRouter.use('/assignment-service', assignmentServiceRouter);
-apiRouter.use('/ai', aiChatRouter);
 apiRouter.use('/support', supportRouter);
-apiRouter.use('/', walletRouter);
+
+// Customer / User App Services (Guarded by User App Status)
+apiRouter.use('/cart', checkAppStatus('user'), cartRouter);
+apiRouter.use('/print', checkAppStatus('user'), printServiceRouter);
+apiRouter.use('/assignment-service', checkAppStatus('user'), assignmentServiceRouter);
+apiRouter.use('/ai', checkAppStatus('user'), aiChatRouter);
 
 export default apiRouter;

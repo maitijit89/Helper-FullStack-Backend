@@ -1,8 +1,10 @@
+import path from 'path';
+import fs from 'fs';
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, AuthenticatedRequest, requireAdmin } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { CreateProductSchema, UpdateProductSchema } from '../schemas/product.schema';
-import { Product, ProductCategory } from '../models/Product';
+import { Product, ProductCategory, formatPublicImageUrl } from '../models/Product';
 import { memoryUpload } from '../middlewares/upload';
 import { s3Service } from '../services/s3.service';
 import { redisService } from '../services/redis.service';
@@ -51,10 +53,15 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       Product.countDocuments(filter),
     ]);
 
+    const formattedProducts = products.map((p: any) => ({
+      ...p,
+      image_url: formatPublicImageUrl(p.image_url),
+    }));
+
     const responsePayload = {
       success: true,
       total,
-      data: products,
+      data: formattedProducts,
     };
 
     // Cache product lists for 3 minutes (180s)
@@ -82,12 +89,47 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 
     const payload = {
       success: true,
-      data: product,
+      data: {
+        ...product,
+        image_url: formatPublicImageUrl(product.image_url),
+      },
     };
 
     await redisService.set(cacheKey, JSON.stringify(payload), 300);
 
     res.status(200).json(payload);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Public: Direct public link to view product image
+router.get('/:id/image', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const product = await Product.findById(req.params.id).lean();
+    if (!product || !product.image_url) {
+      throw new NotFoundException('Product image not found');
+    }
+
+    const publicUrl = formatPublicImageUrl(product.image_url) || product.image_url;
+
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache for 24h
+
+    // If already a full URL (S3, Google CDN, external CDN), redirect directly
+    if (publicUrl.startsWith('http://') || publicUrl.startsWith('https://')) {
+      return res.redirect(302, publicUrl);
+    }
+
+    // If local static path, stream file or redirect
+    if (publicUrl.startsWith('/static/')) {
+      const localRelPath = publicUrl.replace('/static/', '');
+      const localFilePath = path.resolve('uploads', localRelPath);
+      if (fs.existsSync(localFilePath)) {
+        return res.sendFile(localFilePath);
+      }
+    }
+
+    res.redirect(302, publicUrl);
   } catch (err) {
     next(err);
   }

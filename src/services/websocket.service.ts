@@ -126,6 +126,8 @@ class WebSocketManager {
         const { event, data } = JSON.parse(msg);
         if (event === 'partner_location_updated' && data.partner_id && data.location) {
           this.broadcastPartnerLocation(data.partner_id, data.location, true);
+        } else if (event === 'app_status_changed') {
+          this.broadcastEvent(event, data, true);
         }
       } catch (err: any) {
         logger.warn(`Failed to parse ws:broadcast cluster message: ${err.message}`);
@@ -238,6 +240,22 @@ class WebSocketManager {
         }
       });
     });
+
+    if (!fromCluster) {
+      redisService.publish('ws:broadcast', message).catch(() => {});
+    }
+  }
+
+  broadcastEvent(event: string, payload: any, fromCluster: boolean = false) {
+    const message = JSON.stringify({ event, data: payload });
+
+    if (this.wss) {
+      this.wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+          client.send(message);
+        }
+      });
+    }
 
     if (!fromCluster) {
       redisService.publish('ws:broadcast', message).catch(() => {});
