@@ -50,6 +50,7 @@ const WithdrawalRequestSchema = new Schema<IWithdrawalRequest>(
 );
 
 WithdrawalRequestSchema.index({ status: 1, created_at: -1 });
+WithdrawalRequestSchema.index({ partner_id: 1, created_at: -1 });
 
 WithdrawalRequestSchema.methods.touch = function () {
   this.updated_at = new Date();

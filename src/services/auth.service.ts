@@ -5,6 +5,7 @@ import { hashPassword, verifyPassword, createAccessToken, createRefreshToken, ve
 import { BadRequestException, ConflictException, NotFoundException, UnauthorizedException } from '../middlewares/errorHandler';
 import { otpService } from './otp.service';
 import { env } from '../config/env';
+import { wsManager } from './websocket.service';
 
 export interface RegisterDTO {
   email: string;
@@ -103,7 +104,8 @@ class AuthService {
         existing._id.toString(),
         existing.role,
         existing.roles,
-        existing.getAccountType()
+        existing.getAccountType(),
+        existing.token_version
       );
       return { user: existing, tokens };
     }
@@ -154,7 +156,13 @@ class AuthService {
       await wallet.save();
     }
 
-    const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
+    const tokens = this.generateAuthTokens(
+      user._id.toString(),
+      user.role,
+      user.roles,
+      user.getAccountType(),
+      user.token_version
+    );
     return { user, tokens };
   }
 
@@ -195,7 +203,13 @@ class AuthService {
         await user.save();
       }
 
-      const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
+      const tokens = this.generateAuthTokens(
+        user._id.toString(),
+        user.role,
+        user.roles,
+        user.getAccountType(),
+        user.token_version
+      );
       return { user, tokens };
     }
 
@@ -223,7 +237,13 @@ class AuthService {
         throw new UnauthorizedException('Incorrect email or password');
       }
 
-      const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
+      const tokens = this.generateAuthTokens(
+        user._id.toString(),
+        user.role,
+        user.roles,
+        user.getAccountType(),
+        user.token_version
+      );
       return { user, tokens };
     }
 
@@ -252,7 +272,13 @@ class AuthService {
       await user.save();
     }
 
-    const tokens = this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
+    const tokens = this.generateAuthTokens(
+      user._id.toString(),
+      user.role,
+      user.roles,
+      user.getAccountType(),
+      user.token_version
+    );
     return {
       user,
       tokens,
@@ -272,19 +298,68 @@ class AuthService {
         throw new UnauthorizedException('User not found or inactive');
       }
 
-      return this.generateAuthTokens(user._id.toString(), user.role, user.roles, user.getAccountType());
+      return this.generateAuthTokens(
+        user._id.toString(),
+        user.role,
+        user.roles,
+        user.getAccountType(),
+        user.token_version
+      );
     } catch {
       throw new UnauthorizedException('Invalid or expired refresh token');
     }
   }
 
-  async logout(token: string): Promise<void> {
-    try {
-      const payload = verifyToken(token);
-      const remainingSeconds = payload.exp ? payload.exp - Math.floor(Date.now() / 1000) : 1800;
-      await blacklistToken(token, remainingSeconds);
-    } catch {
-      // ignore
+  async logout(token?: string, user?: IUser, refreshToken?: string): Promise<void> {
+    let targetUser = user;
+
+    if (token) {
+      try {
+        const payload = verifyToken(token);
+        const remainingSeconds = payload.exp
+          ? Math.max(1, payload.exp - Math.floor(Date.now() / 1000))
+          : 1800;
+        // Cap Redis TTL at 1 year (31,536,000 seconds)
+        await blacklistToken(token, Math.min(remainingSeconds, 31536000));
+
+        if (!targetUser && payload.sub) {
+          targetUser = (await User.findById(payload.sub)) || undefined;
+        }
+      } catch {
+        // ignore invalid/expired token during blacklist
+      }
+    }
+
+    if (refreshToken) {
+      try {
+        const refreshPayload = verifyToken(refreshToken);
+        const remainingSeconds = refreshPayload.exp
+          ? Math.max(1, refreshPayload.exp - Math.floor(Date.now() / 1000))
+          : 1800;
+        await blacklistToken(refreshToken, Math.min(remainingSeconds, 31536000));
+
+        if (!targetUser && refreshPayload.sub) {
+          targetUser = (await User.findById(refreshPayload.sub)) || undefined;
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    if (targetUser) {
+      targetUser.last_logout_at = new Date();
+      targetUser.token_version = (targetUser.token_version || 0) + 1;
+
+      // Delivery partner cleanup: set offline on logout so no orders ring
+      if (targetUser.partner_profile) {
+        targetUser.partner_profile.is_online = false;
+      }
+
+      targetUser.touch();
+      await targetUser.save();
+
+      // Disconnect active partner WebSocket connection
+      wsManager.disconnectPartner(targetUser._id.toString());
     }
   }
 
@@ -314,11 +389,28 @@ class AuthService {
     userId: string,
     role: string = UserRole.USER,
     roles?: string[],
-    accountType?: string
+    accountType?: string,
+    tokenVersion?: number
   ): AuthTokens {
+    const isPartner =
+      role === UserRole.PARTNER ||
+      role === UserRole.SUPER ||
+      (roles && roles.includes(UserRole.PARTNER)) ||
+      accountType === 'partner' ||
+      accountType === 'super';
+
+    // 1-Year session (365 days = 525,600 minutes) for partners
+    const accessExpiryMinutes = isPartner
+      ? env.PARTNER_ACCESS_TOKEN_EXPIRE_DAYS * 24 * 60
+      : undefined;
+
+    const refreshExpiryDays = isPartner
+      ? env.PARTNER_REFRESH_TOKEN_EXPIRE_DAYS
+      : undefined;
+
     return {
-      access_token: createAccessToken(userId, role, undefined, roles, accountType),
-      refresh_token: createRefreshToken(userId, role, undefined, roles, accountType),
+      access_token: createAccessToken(userId, role, accessExpiryMinutes, roles, accountType, tokenVersion),
+      refresh_token: createRefreshToken(userId, role, refreshExpiryDays, roles, accountType, tokenVersion),
       token_type: 'bearer',
     };
   }

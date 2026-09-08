@@ -6,21 +6,27 @@ import { logger } from '../config/logger';
 
 class DispatchEngine {
   /**
-   * Find available delivery partners within 1.0 km radius of the order location.
+   * Find available delivery partners within radiusKm of the order location.
+   * Utilizes spatial bounding box indexed range query to scale to 10,000+ partners.
    */
   async findNearbyPartners(orderLocation: Coordinates, radiusKm: number = 1.0): Promise<IUser[]> {
+    // 1. Compute spatial bounding box to prune out-of-range records via B-tree index
+    const bbox = geoService.getBoundingBox(orderLocation, radiusKm);
+
+    // 2. Filter indexed candidate partners inside the spatial rectangle
     const activePartners = await User.find({
       $or: [{ role: { $in: [UserRole.PARTNER, UserRole.SUPER] } }, { roles: UserRole.PARTNER }],
       is_active: true,
       is_gps_enabled: true,
       'partner_profile.verification_status': PartnerVerificationStatus.APPROVED,
       'partner_profile.is_online': true,
-      'location.latitude': { $exists: true, $ne: null },
-      'location.longitude': { $exists: true, $ne: null },
-    });
+      'location.latitude': { $gte: bbox.minLat, $lte: bbox.maxLat },
+      'location.longitude': { $gte: bbox.minLng, $lte: bbox.maxLng },
+    }).lean();
 
     const eligiblePartners: IUser[] = [];
 
+    // 3. Exact spherical Haversine filter on immediate vicinity candidates
     for (const partner of activePartners) {
       if (partner.location?.latitude && partner.location?.longitude) {
         const distance = geoService.calculateDistance(orderLocation, {
@@ -29,7 +35,7 @@ class DispatchEngine {
         });
 
         if (distance <= radiusKm) {
-          eligiblePartners.push(partner);
+          eligiblePartners.push(partner as unknown as IUser);
         }
       }
     }

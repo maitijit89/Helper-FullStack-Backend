@@ -9,7 +9,7 @@ export const RegisterSchema = z.object({
       password: z.string().min(6, 'Password must be at least 6 characters').optional(),
       code: z.string().length(6, 'OTP code must be 6 digits').optional(),
       otp: z.string().length(6, 'OTP code must be 6 digits').optional(),
-      full_name: z.string().min(1, 'Full name is required'),
+      full_name: z.string().optional(),
       phone: z.string().optional(),
       role: z.nativeEnum(UserRole).optional().default(UserRole.USER),
       dob: z.string().optional(),

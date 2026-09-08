@@ -45,6 +45,7 @@ const ProductSchema = new Schema<IProduct>(
 
 ProductSchema.index({ category: 1, is_available: 1 });
 ProductSchema.index({ is_available: 1, price: 1 });
+ProductSchema.index({ name: 'text', description: 'text', search_keywords: 'text', tags: 'text' });
 
 ProductSchema.methods.touch = function () {
   this.updated_at = new Date();

@@ -22,6 +22,12 @@ export enum PartnerVerificationStatus {
 export enum VehicleType {
   BICYCLE = 'bicycle',
   WALKING = 'walking',
+  MOTORCYCLE = 'motorcycle',
+  SCOOTER = 'scooter',
+  BIKE = 'bike',
+  AUTO = 'auto',
+  CAR = 'car',
+  OTHER = 'other',
 }
 
 export interface IGPSLocation {
@@ -71,6 +77,8 @@ export interface IUser extends Document {
   is_email_verified: boolean;
   is_active: boolean;
   is_superuser: boolean;
+  last_logout_at?: Date;
+  token_version: number;
   created_at: Date;
   updated_at: Date;
   touch(): void;
@@ -90,7 +98,7 @@ const GPSLocationSchema = new Schema(
 
 const PartnerProfileSchema = new Schema(
   {
-    vehicle_type: { type: String, enum: Object.values(VehicleType) },
+    vehicle_type: { type: String, trim: true, lowercase: true },
     vehicle_number: { type: String },
     driving_license_number: { type: String },
     driving_license_url: { type: String },
@@ -133,6 +141,8 @@ const UserSchema = new Schema<IUser>(
     is_email_verified: { type: Boolean, default: false },
     is_active: { type: Boolean, default: true },
     is_superuser: { type: Boolean, default: false },
+    last_logout_at: { type: Date },
+    token_version: { type: Number, default: 0 },
   },
   {
     timestamps: { createdAt: 'created_at', updatedAt: 'updated_at' },
@@ -144,6 +154,13 @@ const UserSchema = new Schema<IUser>(
 UserSchema.index({ role: 1, is_active: 1 });
 UserSchema.index({ roles: 1, is_active: 1 });
 UserSchema.index({ role: 1, is_active: 1, is_gps_enabled: 1 });
+UserSchema.index({
+  'partner_profile.is_online': 1,
+  'partner_profile.verification_status': 1,
+  is_active: 1,
+  is_gps_enabled: 1,
+});
+UserSchema.index({ 'location.latitude': 1, 'location.longitude': 1 });
 UserSchema.index({ created_at: -1 });
 
 UserSchema.methods.touch = function () {

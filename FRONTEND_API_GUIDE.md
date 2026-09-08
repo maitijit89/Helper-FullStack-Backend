@@ -346,6 +346,8 @@ Response: {
 
 ### 🛵 4.8 Delivery Partner Operations (`/partner` & `/wallet`)
 
+- `POST /partner/login`: Partner login with email & password. **Returns long-lived session tokens valid for 1 year (365 days)** so the delivery partner stays logged in on their device.
+- `POST /partner/logout`: Log out partner account. Immediately revokes access & refresh tokens, sets `is_online: false`, and disconnects active WebSockets. (Optional body: `{ refresh_token: "..." }`).
 - `POST /partner/register`: Submit vehicle & license details for approval.
 - `POST /partner/location`: Stream partner GPS coordinates `{ latitude, longitude, accuracy, is_online }`.
 - `POST /partner/status/toggle`: Toggle `{ is_online: true | false }`.

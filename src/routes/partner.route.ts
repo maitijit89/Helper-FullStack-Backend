@@ -9,7 +9,7 @@ import { dispatchEngine } from '../services/dispatch.service';
 import { walletService } from '../services/wallet.service';
 import { googleSheetsService } from '../services/googleSheets.service';
 import { authService } from '../services/auth.service';
-import { authRateLimiter } from '../middlewares/rateLimiter';
+import { authRateLimiter, partnerLocationRateLimiter } from '../middlewares/rateLimiter';
 import { memoryUpload } from '../middlewares/upload';
 import { s3Service } from '../services/s3.service';
 import { BadRequestException, NotFoundException } from '../middlewares/errorHandler';
@@ -20,25 +20,75 @@ const router = Router();
 router.post('/login', authRateLimiter, validate(LoginSchema), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await authService.login(req.body);
+    const user = result.user;
+    let tokens = result.tokens;
+
+    const isPartner =
+      user.role === UserRole.PARTNER ||
+      user.role === UserRole.SUPER ||
+      (user.roles && user.roles.includes(UserRole.PARTNER)) ||
+      user.getAccountType() === 'partner' ||
+      user.getAccountType() === 'super' ||
+      !!user.partner_profile;
+
+    // If logging into partner portal without partner role, attach it and generate 1-year tokens
+    if (!isPartner) {
+      const currentRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role || UserRole.USER];
+      if (!currentRoles.includes(UserRole.PARTNER)) {
+        currentRoles.push(UserRole.PARTNER);
+      }
+      user.roles = Array.from(new Set(currentRoles));
+      if (!user.partner_profile) {
+        user.partner_profile = {
+          verification_status: PartnerVerificationStatus.PENDING,
+          is_online: false,
+        };
+      }
+      user.touch();
+      await user.save();
+      tokens = authService.generateAuthTokens(
+        user._id.toString(),
+        user.role,
+        user.roles,
+        user.getAccountType(),
+        user.token_version
+      );
+    }
+
     res.status(200).json({
       success: true,
       message: 'Partner login successful',
       data: {
         user: {
-          id: result.user._id,
-          email: result.user.email,
-          full_name: result.user.full_name,
-          role: result.user.role,
-          roles: result.user.roles,
-          account_type: result.user.getAccountType(),
-          is_super_account: result.user.is_super_account,
-          partner_profile: result.user.partner_profile,
+          id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          role: user.role,
+          roles: user.roles,
+          account_type: user.getAccountType(),
+          is_super_account: user.is_super_account,
+          partner_profile: user.partner_profile,
         },
-        tokens: result.tokens,
-        access_token: result.tokens.access_token,
-        refresh_token: result.tokens.refresh_token,
-        token_type: result.tokens.token_type,
+        tokens: tokens,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_type: tokens.token_type,
       },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Partner Logout endpoint (POST /api/v1/partner/logout)
+router.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const refreshToken = req.body?.refresh_token;
+    await authService.logout(req.token, req.user, refreshToken);
+
+    res.status(200).json({
+      success: true,
+      message: 'Partner logged out successfully',
     });
   } catch (err) {
     next(err);
@@ -179,6 +229,7 @@ router.post(
 router.post(
   '/location',
   authenticate,
+  partnerLocationRateLimiter,
   requirePartnerApproved,
   validate(PartnerLocationUpdateSchema),
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -192,8 +243,14 @@ router.post(
         user.partner_profile.is_online = is_online;
       }
 
-      user.touch();
-      await user.save();
+      await User.findByIdAndUpdate(user._id, {
+        $set: {
+          location: user.location,
+          is_gps_enabled: true,
+          ...(is_online !== undefined ? { 'partner_profile.is_online': is_online } : {}),
+          updated_at: new Date(),
+        },
+      });
 
       res.status(200).json({
         success: true,
@@ -246,7 +303,9 @@ router.get(
       const orders = await Order.find({
         status: OrderStatus.PENDING,
         notified_partner_ids: partnerId,
-      }).sort({ created_at: -1 });
+      })
+        .sort({ created_at: -1 })
+        .lean();
 
       res.status(200).json({
         success: true,
@@ -269,7 +328,7 @@ router.get(
       const activeOrder = await Order.findOne({
         partner_id: partnerId,
         status: { $in: [OrderStatus.ASSIGNED, OrderStatus.DOCUMENT_PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] },
-      });
+      }).lean();
 
       res.status(200).json({
         success: true,

@@ -12,6 +12,7 @@ export interface TokenPayload {
   type: 'access' | 'refresh';
   exp?: number;
   iat?: number;
+  token_version?: number;
 }
 
 export async function blacklistToken(token: string, expiresInSeconds: number): Promise<void> {
@@ -39,7 +40,8 @@ export function createAccessToken(
   role: string = UserRole.USER,
   expiresInMinutes?: number,
   roles?: string[],
-  accountType?: string
+  accountType?: string,
+  tokenVersion?: number
 ): string {
   const expiry = (expiresInMinutes ?? env.ACCESS_TOKEN_EXPIRE_MINUTES) * 60;
   const payload: TokenPayload = {
@@ -47,6 +49,7 @@ export function createAccessToken(
     role: role,
     roles: roles,
     account_type: accountType,
+    token_version: tokenVersion,
     type: 'access',
   };
   return jwt.sign(payload, env.SECRET_KEY, {
@@ -60,7 +63,8 @@ export function createRefreshToken(
   role: string = UserRole.USER,
   expiresInDays?: number,
   roles?: string[],
-  accountType?: string
+  accountType?: string,
+  tokenVersion?: number
 ): string {
   const expiry = (expiresInDays ?? env.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 60 * 60;
   const payload: TokenPayload = {
@@ -68,6 +72,7 @@ export function createRefreshToken(
     role: role,
     roles: roles,
     account_type: accountType,
+    token_version: tokenVersion,
     type: 'refresh',
   };
   return jwt.sign(payload, env.SECRET_KEY, {

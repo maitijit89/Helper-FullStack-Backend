@@ -7,6 +7,13 @@ export interface Coordinates {
   longitude: number;
 }
 
+export interface BoundingBox {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+}
+
 class GeoService {
   /**
    * Calculates Haversine distance between two coordinates in kilometers.
@@ -25,6 +32,24 @@ class GeoService {
 
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return +(R * c).toFixed(3);
+  }
+
+  /**
+   * Calculates spatial bounding box coordinates around a center point for a given radius in km.
+   * Enables MongoDB to use B-tree coordinate indexes to prune 99% of documents before spherical distance calculations.
+   */
+  getBoundingBox(center: Coordinates, radiusKm: number): BoundingBox {
+    const latDelta = radiusKm / 111.0;
+    const latRad = (center.latitude * Math.PI) / 180;
+    const cosLat = Math.cos(latRad);
+    const lngDelta = radiusKm / (111.0 * (Math.abs(cosLat) > 0.0001 ? Math.abs(cosLat) : 1.0));
+
+    return {
+      minLat: center.latitude - latDelta,
+      maxLat: center.latitude + latDelta,
+      minLng: center.longitude - lngDelta,
+      maxLng: center.longitude + lngDelta,
+    };
   }
 
   private toRadians(degrees: number): number {

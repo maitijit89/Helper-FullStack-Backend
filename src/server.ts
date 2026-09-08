@@ -3,21 +3,24 @@ import { WebSocketServer } from 'ws';
 import { app } from './app';
 import { env } from './config/env';
 import { logger } from './config/logger';
-import { connectDB, closeDB } from './config/database';
+import { connectDB, closeDB, ensureIndexes } from './config/database';
 import { redisService } from './services/redis.service';
 import { wsManager } from './services/websocket.service';
 import { startKeepAlive, stopKeepAlive } from './services/keepAlive.service';
 
 async function bootstrap() {
-  // 1. Connect Database
+  // 1. Connect Database & sync indexes asynchronously
   await connectDB();
+  ensureIndexes().catch((err) => logger.warn(`Background index sync warning: ${err.message}`));
 
   // 2. Create HTTP Server
   const server = http.createServer(app);
 
-  // Production HTTP connection tuning for reverse proxies (Render, AWS ALB, Nginx)
+  // Production HTTP connection tuning for 10k scale & reverse proxies (AWS ALB, Nginx, Cloudflare)
   server.keepAliveTimeout = 65000;
   server.headersTimeout = 66000;
+  server.requestTimeout = 30000;
+  server.maxHeadersCount = 2000;
 
   // 3. Initialize WebSocket Server
   const wss = new WebSocketServer({ server, path: `${env.API_V1_STR}/ws` });

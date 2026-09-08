@@ -207,7 +207,9 @@ const OrderSchema = new Schema<IOrder>(
 );
 
 OrderSchema.index({ customer_id: 1, created_at: -1 });
-OrderSchema.index({ partner_id: 1, status: 1 });
+OrderSchema.index({ customer_id: 1, status: 1, created_at: -1 });
+OrderSchema.index({ partner_id: 1, status: 1, created_at: -1 });
+OrderSchema.index({ notified_partner_ids: 1, status: 1, created_at: -1 });
 OrderSchema.index({ status: 1, created_at: -1 });
 
 OrderSchema.methods.touch = function () {

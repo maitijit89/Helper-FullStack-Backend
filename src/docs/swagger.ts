@@ -544,5 +544,54 @@ export const swaggerDocument = {
         responses: { 201: { description: 'Withdrawal request created' } },
       },
     },
+    '/partner/login': {
+      post: {
+        tags: ['Delivery Partner'],
+        summary: 'Partner Login (Issues 1-Year Long-Lived Session Tokens)',
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['email', 'password'],
+                properties: {
+                  email: { type: 'string', example: 'rider1@example.com' },
+                  password: { type: 'string', example: 'Partner@123' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Login successful (returns 1-year access and refresh tokens)' },
+          401: { description: 'Invalid credentials' },
+        },
+      },
+    },
+    '/partner/logout': {
+      post: {
+        tags: ['Delivery Partner'],
+        summary: 'Partner Logout (Revokes Tokens, Sets Offline, Disconnects WebSocket)',
+        requestBody: {
+          required: false,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  refresh_token: { type: 'string', description: 'Optional refresh token to blacklist' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: 'Partner logged out successfully' },
+          401: { description: 'Unauthorized' },
+        },
+      },
+    },
   },
 };

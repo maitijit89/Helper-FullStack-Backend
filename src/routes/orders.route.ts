@@ -130,7 +130,9 @@ router.post('/', authenticate, validate(CreateOrderSchema), async (req: Authenti
 router.get('/my-orders', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const customerId = req.user!._id.toString();
-    const orders = await Order.find({ customer_id: customerId }).sort({ created_at: -1 });
+    const orders = await Order.find({ customer_id: customerId })
+      .sort({ created_at: -1 })
+      .lean();
 
     res.status(200).json({
       success: true,

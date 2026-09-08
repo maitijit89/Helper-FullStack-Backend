@@ -27,7 +27,9 @@ router.get('/wallet', authenticate, requirePartnerApproved, async (req: Authenti
 router.get('/wallet/transactions', authenticate, requirePartnerApproved, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const partnerId = req.user!._id.toString();
-    const transactions = await WalletTransaction.find({ partner_id: partnerId }).sort({ created_at: -1 });
+    const transactions = await WalletTransaction.find({ partner_id: partnerId })
+      .sort({ created_at: -1 })
+      .lean();
 
     res.status(200).json({
       success: true,
@@ -87,7 +89,9 @@ router.post(
 router.get('/wallet/withdrawals', authenticate, requirePartnerApproved, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const partnerId = req.user!._id.toString();
-    const requests = await WithdrawalRequest.find({ partner_id: partnerId }).sort({ created_at: -1 });
+    const requests = await WithdrawalRequest.find({ partner_id: partnerId })
+      .sort({ created_at: -1 })
+      .lean();
 
     res.status(200).json({
       success: true,

@@ -92,9 +92,8 @@ router.get('/me', authenticate, async (req: AuthenticatedRequest, res: Response)
 
 router.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
-    if (req.token) {
-      await authService.logout(req.token);
-    }
+    const refreshToken = req.body?.refresh_token;
+    await authService.logout(req.token, req.user, refreshToken);
     res.status(200).json({
       success: true,
       message: 'Logged out successfully',

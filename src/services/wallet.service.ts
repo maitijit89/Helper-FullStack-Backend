@@ -54,16 +54,42 @@ class WalletService {
    * Returns a structured earnings history breakdown for partner analytics.
    */
   async getEarningsHistory(partnerId: string): Promise<any> {
-    const wallet = await this.getOrCreateWallet(partnerId);
-    const balanceInfo = await this.getWithdrawableBalance(partnerId);
-    const transactions = await WalletTransaction.find({ partner_id: partnerId }).sort({ created_at: -1 });
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
-    const totalOrdersCompleted = transactions.filter(t => t.transaction_type === TransactionType.EARNING).length;
+    // Parallelize wallet retrieval, matured earnings aggregation, and transactions query
+    const [wallet, maturedEarnings, transactions] = await Promise.all([
+      this.getOrCreateWallet(partnerId),
+      WalletTransaction.aggregate([
+        {
+          $match: {
+            partner_id: partnerId,
+            transaction_type: TransactionType.EARNING,
+            created_at: { $lte: fortyEightHoursAgo },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+          },
+        },
+      ]),
+      WalletTransaction.find({ partner_id: partnerId }).sort({ created_at: -1 }).lean(),
+    ]);
+
+    const maturedTotal = maturedEarnings[0]?.total || 0.0;
+    const rawWithdrawable = Math.max(
+      0,
+      +(maturedTotal - wallet.total_withdrawn - wallet.pending_withdrawal_balance).toFixed(2)
+    );
+    const withdrawableBalance = Math.min(rawWithdrawable, wallet.total_balance - wallet.pending_withdrawal_balance);
+
+    const totalOrdersCompleted = transactions.filter((t) => t.transaction_type === TransactionType.EARNING).length;
 
     return {
       total_balance: wallet.total_balance,
-      withdrawable_balance: balanceInfo.withdrawable_balance,
-      pending_balance: balanceInfo.pending_balance,
+      withdrawable_balance: withdrawableBalance,
+      pending_balance: wallet.pending_withdrawal_balance,
       total_withdrawn: wallet.total_withdrawn,
       total_completed_trips: totalOrdersCompleted,
       transactions,
@@ -74,25 +100,25 @@ class WalletService {
    * Calculates the currently withdrawable balance based on earnings that have matured past the 48-hour holding period.
    */
   async getWithdrawableBalance(partnerId: string): Promise<{ total_balance: number; withdrawable_balance: number; pending_balance: number }> {
-    const wallet = await this.getOrCreateWallet(partnerId);
-
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
 
-    // Sum of all earnings created before 48 hours ago
-    const maturedEarnings = await WalletTransaction.aggregate([
-      {
-        $match: {
-          partner_id: partnerId,
-          transaction_type: TransactionType.EARNING,
-          created_at: { $lte: fortyEightHoursAgo },
+    const [wallet, maturedEarnings] = await Promise.all([
+      this.getOrCreateWallet(partnerId),
+      WalletTransaction.aggregate([
+        {
+          $match: {
+            partner_id: partnerId,
+            transaction_type: TransactionType.EARNING,
+            created_at: { $lte: fortyEightHoursAgo },
+          },
         },
-      },
-      {
-        $group: {
-          _id: null,
-          total: { $sum: '$amount' },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: '$amount' },
+          },
         },
-      },
+      ]),
     ]);
 
     const maturedTotal = maturedEarnings[0]?.total || 0.0;

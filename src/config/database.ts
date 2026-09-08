@@ -40,19 +40,33 @@ export async function connectDB(): Promise<void> {
   try {
     cachedConnectionPromise = mongoose.connect(mongoUri, {
       dbName: env.MONGODB_DB_NAME,
-      autoIndex: env.ENVIRONMENT !== 'production', // Disable runtime index building in prod for speed
-      maxPoolSize: 10,
-      minPoolSize: 1,
+      autoIndex: true,
+      maxPoolSize: env.MONGODB_MAX_POOL_SIZE,
+      minPoolSize: env.MONGODB_MIN_POOL_SIZE,
       maxIdleTimeMS: 30000,
       serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
     });
     await cachedConnectionPromise;
-    logger.info(`MongoDB connected successfully to database: ${env.MONGODB_DB_NAME}`);
+    logger.info(`MongoDB connected successfully to database: ${env.MONGODB_DB_NAME} (pool: min=${env.MONGODB_MIN_POOL_SIZE}, max=${env.MONGODB_MAX_POOL_SIZE})`);
   } catch (error) {
     cachedConnectionPromise = null;
     logger.error(`MongoDB connection error: ${error}`);
     throw error;
+  }
+}
+
+export async function ensureIndexes(): Promise<void> {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      const models = mongoose.modelNames();
+      for (const name of models) {
+        await mongoose.model(name).syncIndexes();
+      }
+      logger.info('MongoDB compound and spatial indexes synchronized successfully.');
+    }
+  } catch (err: any) {
+    logger.warn(`Background index synchronization warning: ${err.message}`);
   }
 }
 

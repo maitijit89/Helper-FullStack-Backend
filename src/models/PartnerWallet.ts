@@ -52,6 +52,7 @@ const WalletTransactionSchema = new Schema<IWalletTransaction>(
 );
 
 WalletTransactionSchema.index({ partner_id: 1, created_at: -1 });
+WalletTransactionSchema.index({ partner_id: 1, transaction_type: 1, created_at: -1 });
 
 export const PartnerWallet = mongoose.model<IPartnerWallet>('PartnerWallet', PartnerWalletSchema, 'partner_wallets');
 export const WalletTransaction = mongoose.model<IWalletTransaction>('WalletTransaction', WalletTransactionSchema, 'wallet_transactions');

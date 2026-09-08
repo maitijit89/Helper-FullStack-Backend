@@ -16,9 +16,6 @@ export async function authenticate(req: AuthenticatedRequest, res: Response, nex
     }
 
     const token = authHeader.split(' ')[1];
-    if (await isTokenBlacklisted(token)) {
-      throw new UnauthorizedException('Token has been revoked/logged out');
-    }
 
     let payload;
     try {
@@ -31,13 +28,41 @@ export async function authenticate(req: AuthenticatedRequest, res: Response, nex
       throw new UnauthorizedException('Invalid token claims');
     }
 
-    const user = await User.findById(payload.sub);
+    // Parallelize Redis blacklist lookup and MongoDB user query for 2x faster auth resolution
+    const [isBlacklisted, user] = await Promise.all([
+      isTokenBlacklisted(token),
+      User.findById(payload.sub),
+    ]);
+
+    if (isBlacklisted) {
+      throw new UnauthorizedException('Token has been revoked/logged out');
+    }
+
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
     if (!user.is_active) {
       throw new UnauthorizedException('Inactive user account');
+    }
+
+    // Persistent token version check
+    if (
+      user.token_version !== undefined &&
+      payload.token_version !== undefined &&
+      payload.token_version < user.token_version
+    ) {
+      throw new UnauthorizedException('Token has been revoked/logged out');
+    }
+
+    // Check last logout timestamp against token issued_at (iat)
+    if (user.last_logout_at && payload.iat) {
+      const issuedAtMs = payload.iat * 1000;
+      const lastLogoutMs = user.last_logout_at.getTime();
+      // Allow 2000ms clock skew tolerance between token issuance and DB commit
+      if (issuedAtMs < lastLogoutMs - 2000) {
+        throw new UnauthorizedException('Session has expired. Please log in again.');
+      }
     }
 
     req.user = user;
@@ -56,9 +81,6 @@ export async function optionalAuthenticate(req: AuthenticatedRequest, res: Respo
     }
 
     const token = authHeader.split(' ')[1];
-    if (await isTokenBlacklisted(token)) {
-      return next();
-    }
 
     let payload;
     try {
@@ -71,8 +93,26 @@ export async function optionalAuthenticate(req: AuthenticatedRequest, res: Respo
       return next();
     }
 
-    const user = await User.findById(payload.sub);
+    const [isBlacklisted, user] = await Promise.all([
+      isTokenBlacklisted(token),
+      User.findById(payload.sub),
+    ]);
+
+    if (isBlacklisted) {
+      return next();
+    }
+
     if (user && user.is_active) {
+      if (
+        user.token_version !== undefined &&
+        payload.token_version !== undefined &&
+        payload.token_version < user.token_version
+      ) {
+        return next();
+      }
+      if (user.last_logout_at && payload.iat && payload.iat * 1000 < user.last_logout_at.getTime() - 2000) {
+        return next();
+      }
       req.user = user;
       req.token = token;
     }

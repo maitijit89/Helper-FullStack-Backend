@@ -4,6 +4,7 @@ import { UserRole, PartnerVerificationStatus } from '../src/models/User';
 import { User } from '../src/models/User';
 import { otpService } from '../src/services/otp.service';
 import { OTPPurpose } from '../src/models/OTP';
+import jwt from 'jsonwebtoken';
 
 describe('Delivery Partner Lifecycle Tests', () => {
   let partnerToken: string;
@@ -94,5 +95,51 @@ describe('Delivery Partner Lifecycle Tests', () => {
     expect(res.body.success).toBe(true);
     expect(res.body.data.pan_card_url).toBeDefined();
     expect(res.body.data.aadhaar_url).toBeDefined();
+  });
+
+  it('should issue a 1-year long-lived token (365 days) upon partner login', async () => {
+    const res = await request(app)
+      .post('/api/v1/partner/login')
+      .send({
+        email: 'partner@example.com',
+        password: 'password123',
+      });
+
+    expect(res.status).toBe(200);
+    const token = res.body.data.access_token;
+    const decoded: any = jwt.decode(token);
+    expect(decoded).toBeDefined();
+    // 365 days = 31,536,000 seconds
+    const diffSeconds = decoded.exp - decoded.iat;
+    expect(diffSeconds).toBeGreaterThanOrEqual(365 * 24 * 3600 - 60);
+  });
+
+  it('should log out partner via POST /api/v1/partner/logout, revoke token, and set partner offline', async () => {
+    // Verify partner is initially online
+    const userBefore = await User.findById(partnerId);
+    expect(userBefore?.partner_profile?.is_online).toBe(true);
+
+    // Call partner logout endpoint
+    const logoutRes = await request(app)
+      .post('/api/v1/partner/logout')
+      .set('Authorization', `Bearer ${partnerToken}`)
+      .send();
+
+    expect(logoutRes.status).toBe(200);
+    expect(logoutRes.body.success).toBe(true);
+    expect(logoutRes.body.message).toBe('Partner logged out successfully');
+
+    // Verify DB state updated: offline, last_logout_at set, token_version incremented
+    const userAfter = await User.findById(partnerId);
+    expect(userAfter?.partner_profile?.is_online).toBe(false);
+    expect(userAfter?.last_logout_at).toBeDefined();
+    expect(userAfter?.token_version).toBeGreaterThanOrEqual(1);
+
+    // Verify subsequent authenticated call with revoked token returns 401 Unauthorized
+    const profileRes = await request(app)
+      .get('/api/v1/partner/profile')
+      .set('Authorization', `Bearer ${partnerToken}`);
+
+    expect(profileRes.status).toBe(401);
   });
 });
