@@ -1,106 +1,34 @@
-import express, { Express, Request, Response } from 'express';
-import cors from 'cors';
-import helmet from 'helmet';
-import compression from 'compression';
-import morgan from 'morgan';
-import path from 'path';
-import swaggerUi from 'swagger-ui-express';
-import { env } from './config/env';
-import { connectDB } from './config/database';
-import { logger } from './config/logger';
-import { errorHandler } from './middlewares/errorHandler';
-import { standardRateLimiter } from './middlewares/rateLimiter';
-import { swaggerDocument } from './docs/swagger';
-import apiRouter from './routes';
+import express, { Application } from "express";
+import { config } from "./config/env";
+import { apiRouter } from "./routes";
+import { notFoundHandler } from "./shared/middlewares/not-found.middleware";
+import { errorHandler } from "./shared/middlewares/error.middleware";
 
-export function createApp(): Express {
+export const createApp = (): Application => {
   const app = express();
 
-  // Automatic MongoDB connection check for serverless environments (e.g. Vercel)
-  app.use(async (_req: Request, _res: Response, next) => {
-    try {
-      await connectDB();
-    } catch (err: any) {
-      logger.warn(`Serverless DB auto-connect warning: ${err.message}`);
-    }
-    next();
-  });
+  // Core Middlewares
+  app.use(express.json());
+  app.use(express.urlencoded({ extended: true }));
 
-  // Security headers & CORS
-  app.use(
-    helmet({
-      crossOriginResourcePolicy: false,
-      contentSecurityPolicy: false, // Allow Swagger UI inline scripts & assets
-    })
-  );
-
-  app.use(
-    cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
-        if (!origin) return callback(null, true);
-        if (
-          env.BACKEND_CORS_ORIGINS.includes('*') ||
-          env.BACKEND_CORS_ORIGINS.includes(origin) ||
-          env.ENVIRONMENT === 'development' ||
-          process.env.NODE_ENV === 'test'
-        ) {
-          return callback(null, true);
-        }
-        return callback(null, false);
-      },
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
-    })
-  );
-
-  // Response Compression
-  app.use(compression({ threshold: 1000 }));
-
-  // Request Logging
-  if (env.DEBUG) {
-    app.use(morgan('dev'));
-  } else {
-    app.use(morgan('combined'));
-  }
-
-  // Body Parsing
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-  // Standard Rate Limiter
-  app.use(standardRateLimiter);
-
-  // Static files for uploaded assets
-  app.use('/static', express.static(path.resolve('uploads')));
-
-  // Swagger Documentation & OpenAPI JSON
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-  app.use(`${env.API_V1_STR}/docs`, swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-  app.get(`${env.API_V1_STR}/openapi.json`, (req: Request, res: Response) => {
-    res.status(200).json(swaggerDocument);
-  });
-
-  // Root endpoint
-  app.get('/', (req: Request, res: Response) => {
-    res.status(200).json({
-      name: env.PROJECT_NAME,
-      version: env.VERSION,
-      environment: env.ENVIRONMENT,
-      docs: '/docs',
-      health: `${env.API_V1_STR}/health`,
-      database: 'MongoDB (Mongoose ODM)',
+  // Root Welcome Endpoint
+  app.get("/", (_req, res) => {
+    res.json({
+      name: "Helper Backend API",
+      status: "running",
+      documentation: `${config.apiPrefix}/docs`,
+      health: `${config.apiPrefix}/health`,
     });
   });
 
-  // Mount API v1 routes
-  app.use(env.API_V1_STR, apiRouter);
+  // Mount API Features
+  app.use(config.apiPrefix, apiRouter);
 
-  // Centralized Error Handling Middleware
+  // Fallback 404 & Central Error Handling
+  app.use(notFoundHandler);
   app.use(errorHandler);
 
   return app;
-}
+};
 
 export const app = createApp();
