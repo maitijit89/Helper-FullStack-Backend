@@ -1,0 +1,430 @@
+import { Router, Request, Response, NextFunction } from 'express';
+import { authenticate, AuthenticatedRequest, requirePartnerApproved, requireActiveGPS } from '../middlewares/auth';
+import { validate } from '../middlewares/validate';
+import { PartnerRegistrationSchema, PartnerLocationUpdateSchema, PartnerStatusToggleSchema } from '../schemas/partner.schema';
+import { LoginSchema } from '../schemas/auth.schema';
+import { User, UserRole, PartnerVerificationStatus } from '../models/User';
+import { Order, OrderStatus } from '../models/Order';
+import { dispatchEngine } from '../services/dispatch.service';
+import { walletService } from '../services/wallet.service';
+import { googleSheetsService } from '../services/googleSheets.service';
+import { authService } from '../services/auth.service';
+import { authRateLimiter, partnerLocationRateLimiter } from '../middlewares/rateLimiter';
+import { memoryUpload } from '../middlewares/upload';
+import { s3Service } from '../services/s3.service';
+import { BadRequestException, NotFoundException } from '../middlewares/errorHandler';
+
+const router = Router();
+
+// Partner Login endpoint (POST /api/v1/partner/login)
+router.post('/login', authRateLimiter, validate(LoginSchema), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await authService.login(req.body);
+    const user = result.user;
+    let tokens = result.tokens;
+
+    const isPartner =
+      user.role === UserRole.PARTNER ||
+      user.role === UserRole.SUPER ||
+      (user.roles && user.roles.includes(UserRole.PARTNER)) ||
+      user.getAccountType() === 'partner' ||
+      user.getAccountType() === 'super' ||
+      !!user.partner_profile;
+
+    // If logging into partner portal without partner role, attach it and generate 1-year tokens
+    if (!isPartner) {
+      const currentRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role || UserRole.USER];
+      if (!currentRoles.includes(UserRole.PARTNER)) {
+        currentRoles.push(UserRole.PARTNER);
+      }
+      user.roles = Array.from(new Set(currentRoles));
+      if (!user.partner_profile) {
+        user.partner_profile = {
+          verification_status: PartnerVerificationStatus.PENDING,
+          is_online: false,
+        };
+      }
+      user.touch();
+      await user.save();
+      tokens = authService.generateAuthTokens(
+        user._id.toString(),
+        user.role,
+        user.roles,
+        user.getAccountType(),
+        user.token_version
+      );
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Partner login successful',
+      data: {
+        user: {
+          id: user._id,
+          email: user.email,
+          full_name: user.full_name,
+          role: user.role,
+          roles: user.roles,
+          account_type: user.getAccountType(),
+          is_super_account: user.is_super_account,
+          partner_profile: user.partner_profile,
+        },
+        tokens: tokens,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+        token_type: tokens.token_type,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Partner Logout endpoint (POST /api/v1/partner/logout)
+router.post('/logout', authenticate, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const refreshToken = req.body?.refresh_token;
+    await authService.logout(req.token, req.user, refreshToken);
+
+    res.status(200).json({
+      success: true,
+      message: 'Partner logged out successfully',
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get Current Partner Profile (GET /api/v1/partner/profile & GET /api/v1/partner/me)
+router.get(['/profile', '/me'], authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  res.status(200).json({
+    success: true,
+    data: req.user,
+  });
+});
+
+// Partner onboarding / profile submission
+router.post('/register', authenticate, validate(PartnerRegistrationSchema), async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  try {
+    const user = req.user!;
+    const currentRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role || UserRole.USER];
+    if (!currentRoles.includes(UserRole.PARTNER)) {
+      currentRoles.push(UserRole.PARTNER);
+    }
+    user.roles = Array.from(new Set(currentRoles));
+
+    if (user.roles.includes(UserRole.USER) && user.roles.includes(UserRole.PARTNER)) {
+      user.role = UserRole.SUPER;
+    } else {
+      user.role = UserRole.PARTNER;
+    }
+
+    const existingProfile = user.partner_profile ? JSON.parse(JSON.stringify(user.partner_profile)) : {};
+    user.partner_profile = {
+      ...existingProfile,
+      ...req.body,
+      verification_status: PartnerVerificationStatus.PENDING,
+      is_online: false,
+    };
+    user.touch();
+    await user.save();
+
+    await walletService.getOrCreateWallet(user._id.toString());
+
+    // Sync to Google Sheets
+    await googleSheetsService.exportPartnerApplication({
+      user_id: user._id.toString(),
+      email: user.email,
+      full_name: user.full_name,
+      phone: user.phone,
+      vehicle_type: user.partner_profile?.vehicle_type,
+      vehicle_number: user.partner_profile?.vehicle_number,
+      status: PartnerVerificationStatus.PENDING,
+      pan_card_url: user.partner_profile?.pan_card_url,
+      aadhaar_url: user.partner_profile?.aadhaar_url,
+      created_at: user.created_at || new Date(),
+    });
+
+    res.status(200).json({
+      success: true,
+      message: user.role === UserRole.SUPER
+        ? 'Partner application submitted successfully. Your account is now a Super Account.'
+        : 'Partner application submitted successfully. Pending admin approval.',
+      data: user,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Partner document upload (PAN card, Aadhaar)
+router.post(
+  '/upload-documents',
+  authenticate,
+  memoryUpload.fields([
+    { name: 'pan_card', maxCount: 1 },
+    { name: 'pan', maxCount: 1 },
+    { name: 'driving_license', maxCount: 1 },
+    { name: 'aadhaar', maxCount: 1 },
+  ]),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+      if (!user.partner_profile) {
+        user.partner_profile = {
+          verification_status: PartnerVerificationStatus.PENDING,
+          is_online: false,
+        };
+      }
+
+      const panFile = files?.pan_card?.[0] || files?.pan?.[0] || files?.driving_license?.[0];
+      if (panFile) {
+        const panUrl = await s3Service.uploadFile(panFile.buffer, panFile.originalname, panFile.mimetype);
+        user.partner_profile.pan_card_url = panUrl;
+        user.partner_profile.driving_license_url = panUrl; // Preserve backward compatibility
+      }
+
+      if (files?.aadhaar?.[0]) {
+        const aadhaarFile = files.aadhaar[0];
+        const aadhaarUrl = await s3Service.uploadFile(aadhaarFile.buffer, aadhaarFile.originalname, aadhaarFile.mimetype);
+        user.partner_profile.aadhaar_url = aadhaarUrl;
+      }
+
+      user.touch();
+      await user.save();
+
+      // Sync uploaded documents to Google Sheets in background
+      googleSheetsService.exportPartnerApplication({
+        user_id: user._id.toString(),
+        email: user.email,
+        full_name: user.full_name,
+        phone: user.phone,
+        vehicle_type: user.partner_profile?.vehicle_type,
+        vehicle_number: user.partner_profile?.vehicle_number,
+        status: user.partner_profile?.verification_status || PartnerVerificationStatus.PENDING,
+        pan_card_url: user.partner_profile?.pan_card_url,
+        aadhaar_url: user.partner_profile?.aadhaar_url,
+        created_at: user.created_at || new Date(),
+      }).catch(() => {});
+
+      res.status(200).json({
+        success: true,
+        message: 'Documents uploaded successfully',
+        data: {
+          verification_status: user.partner_profile.verification_status,
+          pan_card_url: user.partner_profile.pan_card_url,
+          aadhaar_url: user.partner_profile.aadhaar_url,
+          ...(user.partner_profile.driving_license_url ? { driving_license_url: user.partner_profile.driving_license_url } : {}),
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Update live GPS location & online status
+router.post(
+  '/location',
+  authenticate,
+  partnerLocationRateLimiter,
+  requirePartnerApproved,
+  validate(PartnerLocationUpdateSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      const { latitude, longitude, accuracy, address, is_online } = req.body;
+
+      user.location = { latitude, longitude, accuracy, address, timestamp: new Date() };
+      user.is_gps_enabled = true;
+      if (is_online !== undefined && user.partner_profile) {
+        user.partner_profile.is_online = is_online;
+      }
+
+      await User.findByIdAndUpdate(user._id, {
+        $set: {
+          location: user.location,
+          is_gps_enabled: true,
+          ...(is_online !== undefined ? { 'partner_profile.is_online': is_online } : {}),
+          updated_at: new Date(),
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          location: user.location,
+          is_online: user.partner_profile?.is_online,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Toggle online / offline status
+router.post(
+  '/status/toggle',
+  authenticate,
+  requirePartnerApproved,
+  validate(PartnerStatusToggleSchema),
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const user = req.user!;
+      if (user.partner_profile) {
+        user.partner_profile.is_online = req.body.is_online;
+      }
+      user.touch();
+      await user.save();
+
+      res.status(200).json({
+        success: true,
+        message: `Partner is now ${req.body.is_online ? 'online' : 'offline'}`,
+        is_online: user.partner_profile?.is_online,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Get available ringing orders for this delivery partner
+router.get(
+  '/orders/available',
+  authenticate,
+  requirePartnerApproved,
+  requireActiveGPS,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const partnerId = req.user!._id.toString();
+      const orders = await Order.find({
+        status: OrderStatus.PENDING,
+        notified_partner_ids: partnerId,
+      })
+        .sort({ created_at: -1 })
+        .lean();
+
+      res.status(200).json({
+        success: true,
+        data: orders,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Get currently active accepted order assigned to this partner
+router.get(
+  '/orders/active',
+  authenticate,
+  requirePartnerApproved,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const partnerId = req.user!._id.toString();
+      const activeOrder = await Order.findOne({
+        partner_id: partnerId,
+        status: { $in: [OrderStatus.ASSIGNED, OrderStatus.DOCUMENT_PICKED_UP, OrderStatus.OUT_FOR_DELIVERY] },
+      }).lean();
+
+      res.status(200).json({
+        success: true,
+        data: activeOrder || null,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Accept an order
+router.post(
+  '/orders/:order_id/accept',
+  authenticate,
+  requirePartnerApproved,
+  requireActiveGPS,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const partnerId = req.user!._id.toString();
+      const order = await dispatchEngine.acceptOrder(req.params.order_id, partnerId);
+
+      if (!order) {
+        throw new BadRequestException('Order is no longer available or has already been accepted by another partner.');
+      }
+
+      res.status(200).json({
+        success: true,
+        message: 'Order accepted successfully',
+        data: order,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Get partner earnings history & analytics
+router.get(
+  '/wallet/earnings-history',
+  authenticate,
+  requirePartnerApproved,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const partnerId = req.user!._id.toString();
+      const history = await walletService.getEarningsHistory(partnerId);
+
+      res.status(200).json({
+        success: true,
+        data: history,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+// Update delivery progress / status
+router.patch(
+  '/orders/:order_id/status',
+  authenticate,
+  requirePartnerApproved,
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    try {
+      const partnerId = req.user!._id.toString();
+      const { status } = req.body;
+
+      if (!Object.values(OrderStatus).includes(status)) {
+        throw new BadRequestException(`Invalid order status: ${status}`);
+      }
+
+      const order = await Order.findOne({ order_id: req.params.order_id, partner_id: partnerId });
+      if (!order) {
+        throw new NotFoundException('Order not found or not assigned to you');
+      }
+
+      const previousStatus = order.status;
+      order.status = status;
+      order.touch();
+
+      if (status === OrderStatus.DELIVERED && previousStatus !== OrderStatus.DELIVERED) {
+        // Credit partner earnings safely once
+        await walletService.creditOrderEarnings(partnerId, order.order_id, order.delivery_fee);
+      }
+
+      await order.save();
+
+      res.status(200).json({
+        success: true,
+        message: `Order status updated to ${status}`,
+        data: order,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+export default router;
