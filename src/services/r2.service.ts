@@ -1,5 +1,3 @@
-import path from 'path';
-import fs from 'fs';
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { env } from '../config/env';
@@ -38,7 +36,7 @@ export class CloudflareR2Service {
         logger.warn(`Failed to initialize Cloudflare R2 client: ${err.message}`);
       }
     } else {
-      logger.info('Cloudflare R2 credentials not configured. Operating with local filesystem storage.');
+      logger.info('Cloudflare R2 credentials not configured.');
     }
   }
 
@@ -47,60 +45,38 @@ export class CloudflareR2Service {
   }
 
   get provider(): string {
-    return this.isConfigured ? 'cloudflare-r2' : 'local';
+    return this.isConfigured ? 'cloudflare-r2' : 'unconfigured';
   }
 
-  async uploadFile(
+  async putObject(
+    key: string,
     fileBuffer: Buffer,
-    fileName: string,
-    contentType: string = 'application/octet-stream',
-    folder: string = 'uploads'
+    contentType: string = 'application/octet-stream'
   ): Promise<string> {
     if (!this.client || !this.bucket) {
-      return this.saveLocalFile(fileBuffer, fileName, folder);
+      throw new Error('Cloudflare R2 client is not configured');
     }
 
-    try {
-      const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-      const key = `${folder}/${Date.now()}-${cleanName}`;
-      const command = new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: key,
-        Body: fileBuffer,
-        ContentType: contentType,
-      });
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      Body: fileBuffer,
+      ContentType: contentType,
+    });
 
-      await this.client.send(command);
+    await this.client.send(command);
 
-      // Cloudflare R2 custom domain or public endpoint URL
-      if (env.CLOUDFLARE_R2_PUBLIC_URL) {
-        const publicBase = env.CLOUDFLARE_R2_PUBLIC_URL.replace(/\/+$/, '');
-        return `${publicBase}/${key}`;
-      }
-
-      // If no public domain, return 7-day presigned URL
-      return await this.getPresignedUrl(key, 86400 * 7);
-    } catch (err: any) {
-      logger.warn(`Cloudflare R2 upload error: ${err.message}. Falling back to local storage.`);
-      return this.saveLocalFile(fileBuffer, fileName, folder);
+    if (env.CLOUDFLARE_R2_PUBLIC_URL) {
+      const publicBase = env.CLOUDFLARE_R2_PUBLIC_URL.replace(/\/+$/, '');
+      return `${publicBase}/${key}`;
     }
-  }
 
-  private saveLocalFile(fileBuffer: Buffer, fileName: string, folder: string = 'uploads'): string {
-    const cleanName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const safeName = `${Date.now()}-${cleanName}`;
-    const uploadDir = path.resolve('uploads', folder);
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    fs.writeFileSync(path.join(uploadDir, safeName), fileBuffer);
-    logger.info(`Saved file to local storage: uploads/${folder}/${safeName}`);
-    return `/static/${folder}/${safeName}`;
+    return this.getPresignedUrl(key, 86400 * 7);
   }
 
   async getPresignedUrl(key: string, expiresInSeconds: number = 3600): Promise<string> {
     if (!this.client || !this.bucket) {
-      return `/static/${key}`;
+      throw new Error('Cloudflare R2 client is not configured');
     }
 
     const command = new GetObjectCommand({
@@ -111,13 +87,8 @@ export class CloudflareR2Service {
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
 
-  async deleteFile(key: string): Promise<boolean> {
+  async deleteObject(key: string): Promise<boolean> {
     if (!this.client || !this.bucket) {
-      const localPath = path.resolve('uploads', key);
-      if (fs.existsSync(localPath)) {
-        fs.unlinkSync(localPath);
-        return true;
-      }
       return false;
     }
 
@@ -137,4 +108,3 @@ export class CloudflareR2Service {
 
 export const r2Service = new CloudflareR2Service();
 export const storageService = r2Service;
-

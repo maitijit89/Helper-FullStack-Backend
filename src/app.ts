@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
-import path from 'path';
 import { env } from './config/env';
 import { connectDB } from './config/database';
 import { logger } from './config/logger';
@@ -67,9 +66,6 @@ export function createApp(): Express {
 
   // Standard Rate Limiter
   app.use(standardRateLimiter);
-
-  // Static files for local uploaded assets fallback
-  app.use('/static', express.static(path.resolve('uploads')));
 
   // Root endpoint
   app.get('/', (req: Request, res: Response) => {

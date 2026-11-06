@@ -1,9 +1,9 @@
 # Node.js 22 + Express + TypeScript Backend (v1.2.1)
 
 A clean, production-grade starter template powered by **Node.js 22 LTS**, **Express.js**, and **TypeScript**, configured with:
-- **Database**: MongoDB (Mongoose 8 ODM)
-- **Distributed Cache**: Upstash Redis (TLS TCP & REST HTTP support)
-- **Object Storage**: Cloudflare R2 (S3-compatible, zero egress fees)
+- **Database**: MongoDB (Mongoose 8 ODM) with connection pooling & graceful shutdown
+- **Distributed Cache**: Upstash Redis (TLS TCP & REST HTTP support with in-memory fallback)
+- **Object Storage**: Cloudflare R2 (S3-compatible, zero egress fees) via `@aws-sdk/client-s3`
 
 ---
 
@@ -13,19 +13,17 @@ A clean, production-grade starter template powered by **Node.js 22 LTS**, **Expr
 src/
 ├── config/
 │   ├── database.ts      # MongoDB connection pooling, SRV resolution & graceful disconnect
-│   ├── env.ts           # Type-safe environment variable parsing
+│   ├── env.ts           # Type-safe environment variable parsing with Zod
 │   └── logger.ts        # Centralized application logging
 ├── middlewares/
 │   ├── errorHandler.ts  # Centralized exception handling hierarchy
 │   ├── rateLimiter.ts   # Express rate limiting
-│   ├── upload.ts        # Multer memory storage for Cloudflare R2 streaming
 │   └── validate.ts      # Zod request validation middleware
 ├── routes/
 │   ├── health.route.ts  # Detailed health probe (MongoDB, Upstash Redis, Cloudflare R2)
-│   ├── storage.route.ts # Cloudflare R2 upload & presigned URL endpoints
 │   └── index.ts         # Main router entrypoint
 ├── services/
-│   ├── r2.service.ts    # Cloudflare R2 upload, presign, and delete client
+│   ├── r2.service.ts    # Cloudflare R2 putObject, getPresignedUrl, and deleteObject client
 │   └── redis.service.ts # Upstash Redis caching with in-memory fallback
 ├── app.ts               # Express configuration (Helmet, CORS, Compression, Morgan)
 └── server.ts            # Server entrypoint with graceful shutdown
@@ -38,8 +36,8 @@ src/
 ### 1. Prerequisites
 - **Node.js** >= 22.0.0
 - **MongoDB** (Local or MongoDB Atlas)
-- **Upstash Redis** (optional, includes in-memory fallback)
-- **Cloudflare R2** (optional, includes local storage fallback)
+- **Upstash Redis** (Optional, includes in-memory fallback)
+- **Cloudflare R2** (Optional, configure when ready for object storage)
 
 ### 2. Setup
 ```bash
@@ -92,11 +90,28 @@ npm test
 
 ## API Endpoints
 
-All endpoints are prefixed with `/api/v1`:
+All API endpoints are mounted under `/api/v1`:
 
 | Method | Endpoint | Description |
 | :--- | :--- | :--- |
-| `GET` | `/` | Service info & health summary |
+| `GET` | `/` | Root info & service health status |
 | `GET` | `/api/v1/health` | Comprehensive health check (MongoDB, Redis, Storage) |
-| `POST` | `/api/v1/storage/upload` | Upload file to Cloudflare R2 (field `file`) |
-| `GET` | `/api/v1/storage/presigned-url` | Generate presigned access URL (`?key=...`) |
+
+---
+
+## Object Storage (Cloudflare R2)
+
+Cloudflare R2 service is available programmatically via `src/services/r2.service.ts`:
+
+```typescript
+import { r2Service } from './services/r2.service';
+
+// Upload a buffer
+const fileUrl = await r2Service.putObject('avatars/user-123.jpg', buffer, 'image/jpeg');
+
+// Generate a signed URL for secure download
+const presignedUrl = await r2Service.getPresignedUrl('documents/doc.pdf', 3600);
+
+// Delete an object
+await r2Service.deleteObject('avatars/user-123.jpg');
+```

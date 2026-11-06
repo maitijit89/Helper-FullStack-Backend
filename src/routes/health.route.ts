@@ -9,7 +9,7 @@ const router = Router();
 router.get('/health', async (req: Request, res: Response) => {
   const dbState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
   const redisState = redisService.getStatus();
-  const storageState = r2Service.isConfigured ? 'cloudflare-r2' : 'local_fallback';
+  const storageState = r2Service.provider;
 
   res.status(200).json({
     status: 'ok',

@@ -1,5 +1,7 @@
 import request from 'supertest';
 import { app } from '../src/app';
+import { r2Service } from '../src/services/r2.service';
+import { redisService } from '../src/services/redis.service';
 
 describe('Health and System Status Integration Tests', () => {
   it('should return 200 OK on root endpoint', async () => {
@@ -25,3 +27,34 @@ describe('Health and System Status Integration Tests', () => {
   });
 });
 
+describe('Cloudflare R2 Service Unit Tests', () => {
+  it('should expose provider state and throw when unconfigured', async () => {
+    expect(typeof r2Service.isConfigured).toBe('boolean');
+    expect(['cloudflare-r2', 'unconfigured']).toContain(r2Service.provider);
+
+    if (!r2Service.isConfigured) {
+      await expect(
+        r2Service.putObject('test.txt', Buffer.from('test'))
+      ).rejects.toThrow('Cloudflare R2 client is not configured');
+
+      await expect(
+        r2Service.getPresignedUrl('test.txt')
+      ).rejects.toThrow('Cloudflare R2 client is not configured');
+
+      const deleted = await r2Service.deleteObject('test.txt');
+      expect(deleted).toBe(false);
+    }
+  });
+});
+
+describe('Upstash Redis Service Unit Tests', () => {
+  it('should support set, get, and del caching operations', async () => {
+    await redisService.set('test_key', 'test_value', 10);
+    const value = await redisService.get('test_key');
+    expect(value).toBe('test_value');
+
+    await redisService.del('test_key');
+    const deletedVal = await redisService.get('test_key');
+    expect(deletedVal).toBeNull();
+  });
+});

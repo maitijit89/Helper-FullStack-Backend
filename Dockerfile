@@ -25,9 +25,6 @@ RUN npm ci --only=production
 
 COPY --from=builder /app/dist ./dist
 
-# Create uploads directory
-RUN mkdir -p uploads/products uploads/print_documents
-
 EXPOSE 8000
 
 CMD ["node", "dist/server.js"]
