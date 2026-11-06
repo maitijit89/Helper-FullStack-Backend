@@ -1,42 +1,50 @@
-import Redis from 'ioredis';
-import { env } from '../config/env';
-import { logger } from '../config/logger';
+import Redis from "ioredis";
+import { env } from "../config/env";
+import { logger } from "../config/logger";
 
 class RedisService {
   private client: Redis | null = null;
   private subClient: Redis | null = null;
-  private inMemoryFallback: Map<string, { value: string; expiresAt?: number }> = new Map();
+  private inMemoryFallback: Map<string, { value: string; expiresAt?: number }> =
+    new Map();
   private isUpstash: boolean = false;
 
   constructor() {
     const redisUrl = env.REDIS_URL || process.env.UPSTASH_REDIS_URL;
 
-    if (redisUrl && process.env.NODE_ENV !== 'test') {
+    if (redisUrl && process.env.NODE_ENV !== "test") {
       try {
-        this.isUpstash = redisUrl.includes('upstash.io') || redisUrl.startsWith('rediss://');
+        this.isUpstash =
+          redisUrl.includes("upstash.io") || redisUrl.startsWith("rediss://");
 
         this.client = new Redis(redisUrl, {
           lazyConnect: true,
           maxRetriesPerRequest: 2,
           enableReadyCheck: true,
           connectTimeout: 10000,
-          tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
+          tls: redisUrl.startsWith("rediss://")
+            ? { rejectUnauthorized: false }
+            : undefined,
           retryStrategy: (times) => {
             if (times > 5) return null;
             return Math.min(times * 150, 2000);
           },
         });
 
-        this.client.on('error', (err) => {
+        this.client.on("error", (err) => {
           logger.warn(`Redis client warning: ${err.message}`);
         });
 
-        this.client.on('ready', () => {
-          logger.info(`Connected to ${this.isUpstash ? 'Upstash Redis' : 'Redis'} Cache successfully.`);
+        this.client.on("ready", () => {
+          logger.info(
+            `Connected to ${this.isUpstash ? "Upstash Redis" : "Redis"} Cache successfully.`,
+          );
         });
 
         this.client.connect().catch((err) => {
-          logger.warn(`Initial Redis connection failed, using high-speed in-memory cache: ${err.message}`);
+          logger.warn(
+            `Initial Redis connection failed, using high-speed in-memory cache: ${err.message}`,
+          );
         });
       } catch (err) {
         logger.warn(`Could not initialize Redis client: ${err}`);
@@ -45,14 +53,14 @@ class RedisService {
   }
 
   getStatus(): string {
-    if (this.client && this.client.status === 'ready') {
-      return this.isUpstash ? 'upstash_connected' : 'connected';
+    if (this.client && this.client.status === "ready") {
+      return this.isUpstash ? "upstash_connected" : "connected";
     }
-    return env.REDIS_URL ? 'connecting_or_fallback' : 'in_memory';
+    return env.REDIS_URL ? "connecting_or_fallback" : "in_memory";
   }
 
   async get(key: string): Promise<string | null> {
-    if (this.client && this.client.status === 'ready') {
+    if (this.client && this.client.status === "ready") {
       try {
         return await this.client.get(key);
       } catch {
@@ -69,10 +77,10 @@ class RedisService {
   }
 
   async set(key: string, value: string, expireSeconds?: number): Promise<void> {
-    if (this.client && this.client.status === 'ready') {
+    if (this.client && this.client.status === "ready") {
       try {
         if (expireSeconds && expireSeconds > 0) {
-          await this.client.set(key, value, 'EX', expireSeconds);
+          await this.client.set(key, value, "EX", expireSeconds);
         } else {
           await this.client.set(key, value);
         }
@@ -81,12 +89,15 @@ class RedisService {
         // fallback
       }
     }
-    const expiresAt = expireSeconds && expireSeconds > 0 ? Date.now() + expireSeconds * 1000 : undefined;
+    const expiresAt =
+      expireSeconds && expireSeconds > 0
+        ? Date.now() + expireSeconds * 1000
+        : undefined;
     this.inMemoryFallback.set(key, { value, expiresAt });
   }
 
   async del(key: string): Promise<void> {
-    if (this.client && this.client.status === 'ready') {
+    if (this.client && this.client.status === "ready") {
       try {
         await this.client.del(key);
         return;
@@ -98,10 +109,10 @@ class RedisService {
   }
 
   async delPattern(pattern: string): Promise<void> {
-    if (this.client && this.client.status === 'ready') {
+    if (this.client && this.client.status === "ready") {
       try {
         const stream = this.client.scanStream({ match: pattern, count: 100 });
-        stream.on('data', async (keys: string[]) => {
+        stream.on("data", async (keys: string[]) => {
           if (keys.length > 0 && this.client) {
             stream.pause();
             await this.client.del(...keys).catch(() => {});
@@ -113,7 +124,7 @@ class RedisService {
       }
     }
     // Also clear from memory fallback
-    const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+    const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");
     for (const key of this.inMemoryFallback.keys()) {
       if (regex.test(key)) {
         this.inMemoryFallback.delete(key);
@@ -122,7 +133,7 @@ class RedisService {
   }
 
   async publish(channel: string, message: string): Promise<void> {
-    if (this.client && this.client.status === 'ready') {
+    if (this.client && this.client.status === "ready") {
       try {
         await this.client.publish(channel, message);
       } catch (err: any) {
@@ -131,14 +142,17 @@ class RedisService {
     }
   }
 
-  async subscribe(channel: string, onMessage: (message: string) => void): Promise<void> {
-    if (env.REDIS_URL && process.env.NODE_ENV !== 'test') {
+  async subscribe(
+    channel: string,
+    onMessage: (message: string) => void,
+  ): Promise<void> {
+    if (env.REDIS_URL && process.env.NODE_ENV !== "test") {
       if (!this.subClient) {
         try {
           this.subClient = new Redis(env.REDIS_URL, {
             lazyConnect: true,
             maxRetriesPerRequest: 2,
-            tls: env.REDIS_URL.startsWith('rediss://') ? {} : undefined,
+            tls: env.REDIS_URL.startsWith("rediss://") ? {} : undefined,
           });
           await this.subClient.connect().catch((err) => {
             logger.warn(`Redis subClient connection warning: ${err.message}`);
@@ -150,20 +164,27 @@ class RedisService {
       if (this.subClient) {
         try {
           await this.subClient.subscribe(channel);
-          this.subClient.on('message', (ch, msg) => {
+          this.subClient.on("message", (ch, msg) => {
             if (ch === channel) {
               onMessage(msg);
             }
           });
         } catch (err: any) {
-          logger.warn(`Redis subscribe warning on channel ${channel}: ${err.message}`);
+          logger.warn(
+            `Redis subscribe warning on channel ${channel}: ${err.message}`,
+          );
         }
       }
     }
   }
 
-  async geoAdd(key: string, longitude: number, latitude: number, member: string): Promise<void> {
-    if (this.client && this.client.status === 'ready') {
+  async geoAdd(
+    key: string,
+    longitude: number,
+    latitude: number,
+    member: string,
+  ): Promise<void> {
+    if (this.client && this.client.status === "ready") {
       try {
         await this.client.geoadd(key, longitude, latitude, member);
       } catch {
@@ -172,10 +193,21 @@ class RedisService {
     }
   }
 
-  async geoRadius(key: string, longitude: number, latitude: number, radiusKm: number): Promise<string[]> {
-    if (this.client && this.client.status === 'ready') {
+  async geoRadius(
+    key: string,
+    longitude: number,
+    latitude: number,
+    radiusKm: number,
+  ): Promise<string[]> {
+    if (this.client && this.client.status === "ready") {
       try {
-        const results = await this.client.georadius(key, longitude, latitude, radiusKm, 'km');
+        const results = await this.client.georadius(
+          key,
+          longitude,
+          latitude,
+          radiusKm,
+          "km",
+        );
         return Array.isArray(results) ? (results as unknown as string[]) : [];
       } catch {
         return [];
