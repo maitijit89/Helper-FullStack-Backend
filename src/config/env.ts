@@ -18,7 +18,7 @@ function parseCorsOrigins(val?: string): string[] {
 }
 
 export const env = {
-  PROJECT_NAME: process.env.PROJECT_NAME || 'Backend Core API',
+  PROJECT_NAME: process.env.PROJECT_NAME || 'Helping Services',
   VERSION: process.env.VERSION || '1.2.1',
   API_V1_STR: process.env.API_V1_STR || '/api/v1',
   ENVIRONMENT: process.env.ENVIRONMENT || 'development',
@@ -30,9 +30,25 @@ export const env = {
   // CORS
   BACKEND_CORS_ORIGINS: parseCorsOrigins(process.env.BACKEND_CORS_ORIGINS),
 
+  // JWT Configuration
+  JWT_SECRET: process.env.JWT_SECRET || 'helping-services-jwt-super-secret-key-2026',
+  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
+
+  // OTP Configuration
+  OTP_EXPIRES_IN_MINUTES: parseInt(process.env.OTP_EXPIRES_IN_MINUTES || '10', 10),
+  REGISTRATION_REMINDER_DAYS: parseInt(process.env.REGISTRATION_REMINDER_DAYS || '3', 10),
+
+  // SMTP Email Configuration
+  SMTP_HOST: process.env.SMTP_HOST || '',
+  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
+  SMTP_USER: process.env.SMTP_USER || '',
+  SMTP_PASS: process.env.SMTP_PASS || '',
+  SMTP_FROM: process.env.SMTP_FROM || 'Helping Services <noreply@helpingservices.com>',
+  SMTP_SECURE: process.env.SMTP_SECURE === 'true',
+
   // Database (MongoDB)
   MONGODB_URL: process.env.MONGODB_URL || 'mongodb://localhost:27017',
-  MONGODB_DB_NAME: process.env.MONGODB_DB_NAME || 'app_db',
+  MONGODB_DB_NAME: process.env.MONGODB_DB_NAME || 'helping_services_db',
   MONGODB_MAX_POOL_SIZE: parseInt(process.env.MONGODB_MAX_POOL_SIZE || '50', 10),
   MONGODB_MIN_POOL_SIZE: parseInt(process.env.MONGODB_MIN_POOL_SIZE || '10', 10),
 

@@ -4,13 +4,17 @@ import { env } from './config/env';
 import { logger } from './config/logger';
 import { connectDB, closeDB, ensureIndexes } from './config/database';
 import { redisService } from './services/redis.service';
+import { reminderService } from './services/reminder.service';
 
 async function bootstrap() {
   // 1. Connect MongoDB & sync indexes
   await connectDB();
   ensureIndexes().catch((err) => logger.warn(`Background index sync warning: ${err.message}`));
 
-  // 2. Create HTTP Server
+  // 2. Start Registration Reminder Worker (for users who didn't verify OTP within 3 days)
+  reminderService.startScheduler();
+
+  // 3. Create HTTP Server
   const server = http.createServer(app);
 
   // Production HTTP connection tuning for reverse proxies (Cloudflare, Nginx, Load Balancers)
@@ -19,7 +23,7 @@ async function bootstrap() {
   server.requestTimeout = 30000;
   server.maxHeadersCount = 2000;
 
-  // 3. Start Server Listening
+  // 4. Start Server Listening
   server.listen(env.PORT, env.HOST, () => {
     logger.info(`====================================================`);
     logger.info(`🚀 ${env.PROJECT_NAME} (v${env.VERSION}) running at http://${env.HOST}:${env.PORT}`);
@@ -28,9 +32,10 @@ async function bootstrap() {
     logger.info(`====================================================`);
   });
 
-  // 4. Graceful Shutdown handlers
+  // 5. Graceful Shutdown handlers
   const shutdown = async (signal: string) => {
     logger.info(`Received ${signal}. Gracefully shutting down...`);
+    reminderService.stopScheduler();
     server.close(async () => {
       await redisService.disconnect();
       await closeDB();

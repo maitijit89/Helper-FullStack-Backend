@@ -1,7 +1,20 @@
 import { Request, Response, NextFunction } from 'express';
-import { AnyZodObject, ZodError, ZodTypeAny } from 'zod';
+import { AnyZodObject, ZodEffects, ZodError } from 'zod';
 
-export function validate(schema: AnyZodObject | ZodTypeAny) {
+type SchemaType = AnyZodObject | ZodEffects<any>;
+
+export function validateBody(schema: SchemaType) {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      req.body = await schema.parseAsync(req.body);
+      next();
+    } catch (error) {
+      next(error);
+    }
+  };
+}
+
+export function validate(schema: SchemaType) {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const parsed = await schema.parseAsync({
@@ -9,16 +22,12 @@ export function validate(schema: AnyZodObject | ZodTypeAny) {
         query: req.query,
         params: req.params,
       });
-      req.body = parsed.body ?? req.body;
-      req.query = parsed.query ?? req.query;
-      req.params = parsed.params ?? req.params;
+      if (parsed.body) req.body = parsed.body;
+      if (parsed.query) req.query = parsed.query;
+      if (parsed.params) req.params = parsed.params;
       next();
     } catch (error) {
-      if (error instanceof ZodError) {
-        next(error);
-      } else {
-        next(error);
-      }
+      next(error);
     }
   };
 }
