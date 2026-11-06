@@ -27,15 +27,6 @@ export const env = {
   HOST: process.env.HOST || '0.0.0.0',
   PORT: parseInt(process.env.PORT || '8000', 10),
 
-  // Security & Authentication
-  SECRET_KEY: process.env.SECRET_KEY || 'supersecretkey-change-this-in-production-use-openssl-rand-hex-32',
-  ALGORITHM: process.env.ALGORITHM || 'HS256',
-  ACCESS_TOKEN_EXPIRE_MINUTES: parseInt(process.env.ACCESS_TOKEN_EXPIRE_MINUTES || '60', 10),
-  REFRESH_TOKEN_EXPIRE_DAYS: parseInt(process.env.REFRESH_TOKEN_EXPIRE_DAYS || '7', 10),
-
-  // Admin
-  ADMIN_EMAIL: process.env.ADMIN_EMAIL || 'admin@example.com',
-
   // CORS
   BACKEND_CORS_ORIGINS: parseCorsOrigins(process.env.BACKEND_CORS_ORIGINS),
 
@@ -58,16 +49,6 @@ export const env = {
   CLOUDFLARE_R2_PUBLIC_URL: process.env.CLOUDFLARE_R2_PUBLIC_URL || '',
   CLOUDFLARE_R2_ENDPOINT: process.env.CLOUDFLARE_R2_ENDPOINT || '',
 
-  // Email (SMTP - Optional)
-  SMTP_HOST: process.env.SMTP_HOST || 'smtp.gmail.com',
-  SMTP_PORT: parseInt(process.env.SMTP_PORT || '587', 10),
-  SMTP_TLS: process.env.SMTP_TLS !== 'false',
-  SMTP_USER: process.env.SMTP_USER || '',
-  SMTP_PASSWORD: process.env.SMTP_PASSWORD || '',
-  EMAILS_FROM_EMAIL: process.env.EMAILS_FROM_EMAIL || 'noreply@example.com',
-  EMAILS_FROM_NAME: process.env.EMAILS_FROM_NAME || 'Backend Core Team',
-
   // Rate Limiting
   RATE_LIMIT_PER_MINUTE: parseInt(process.env.RATE_LIMIT_PER_MINUTE || '300', 10),
-  AUTH_RATE_LIMIT_PER_MINUTE: parseInt(process.env.AUTH_RATE_LIMIT_PER_MINUTE || '30', 10),
 };

@@ -1,5 +1,4 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate } from '../middlewares/auth';
 import { uploadSingle } from '../middlewares/upload';
 import { r2Service } from '../services/r2.service';
 import { BadRequestException } from '../middlewares/errorHandler';
@@ -7,7 +6,7 @@ import { BadRequestException } from '../middlewares/errorHandler';
 const router = Router();
 
 // Upload a single file to Cloudflare R2
-router.post('/upload', authenticate, uploadSingle('file'), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/upload', uploadSingle('file'), async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.file) {
       throw new BadRequestException('No file provided in request payload (field "file" required)');
@@ -38,7 +37,7 @@ router.post('/upload', authenticate, uploadSingle('file'), async (req: Request, 
 });
 
 // Generate presigned download URL
-router.get('/presigned-url', authenticate, async (req: Request, res: Response, next: NextFunction) => {
+router.get('/presigned-url', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const key = req.query.key as string;
     if (!key) {

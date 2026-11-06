@@ -1,21 +1,35 @@
-# Node.js 22 + Express + TypeScript Backend Core (v1.2.1)
+# Node.js 22 + Express + TypeScript Backend (v1.2.1)
 
-A production-ready, clean-architecture backend powered by **Node.js 22**, **Express.js**, and **TypeScript**, configured with:
-- **Database**: MongoDB (Mongoose ODM)
-- **Distributed Cache**: Upstash Redis
+A clean, production-grade starter template powered by **Node.js 22 LTS**, **Express.js**, and **TypeScript**, configured with:
+- **Database**: MongoDB (Mongoose 8 ODM)
+- **Distributed Cache**: Upstash Redis (TLS TCP & REST HTTP support)
 - **Object Storage**: Cloudflare R2 (S3-compatible, zero egress fees)
 
 ---
 
-## Architecture & Features
+## Project Structure
 
-- **Runtime & Language**: Node.js 22 LTS with strict TypeScript (`ES2022`).
-- **Web Framework**: Express.js with Helmet security headers, CORS, compression, Morgan logging, and rate limiting.
-- **Database**: MongoDB via Mongoose 8 with connection pooling, DNS SRV resolution, index auto-synchronization, and graceful disconnect.
-- **Cache**: Upstash Redis with TLS connection (`rediss://`), connection pooling, auto-reconnect, and local in-memory fallback.
-- **Object Storage**: Cloudflare R2 storage integration (`@aws-sdk/client-s3`) supporting multipart uploads, custom CDN domain public URLs, and presigned URLs.
-- **Authentication**: JWT authentication with access/refresh tokens, password hashing with `bcryptjs`, and Redis token blacklisting.
-- **Centralized Error Handling**: Custom error hierarchy (`AppError`, `BadRequestException`, `UnauthorizedException`, `NotFoundException`, etc.) and Zod schema validation middleware.
+```
+src/
+├── config/
+│   ├── database.ts      # MongoDB connection pooling, SRV resolution & graceful disconnect
+│   ├── env.ts           # Type-safe environment variable parsing
+│   └── logger.ts        # Centralized application logging
+├── middlewares/
+│   ├── errorHandler.ts  # Centralized exception handling hierarchy
+│   ├── rateLimiter.ts   # Express rate limiting
+│   ├── upload.ts        # Multer memory storage for Cloudflare R2 streaming
+│   └── validate.ts      # Zod request validation middleware
+├── routes/
+│   ├── health.route.ts  # Detailed health probe (MongoDB, Upstash Redis, Cloudflare R2)
+│   ├── storage.route.ts # Cloudflare R2 upload & presigned URL endpoints
+│   └── index.ts         # Main router entrypoint
+├── services/
+│   ├── r2.service.ts    # Cloudflare R2 upload, presign, and delete client
+│   └── redis.service.ts # Upstash Redis caching with in-memory fallback
+├── app.ts               # Express configuration (Helmet, CORS, Compression, Morgan)
+└── server.ts            # Server entrypoint with graceful shutdown
+```
 
 ---
 
@@ -24,10 +38,10 @@ A production-ready, clean-architecture backend powered by **Node.js 22**, **Expr
 ### 1. Prerequisites
 - **Node.js** >= 22.0.0
 - **MongoDB** (Local or MongoDB Atlas)
-- **Upstash Redis** (or local Redis, optional in-memory fallback)
-- **Cloudflare R2 Bucket** (optional local filesystem fallback)
+- **Upstash Redis** (optional, includes in-memory fallback)
+- **Cloudflare R2** (optional, includes local storage fallback)
 
-### 2. Installation
+### 2. Setup
 ```bash
 # Clone the repository
 git clone https://github.com/maitijit89/Helper-FullStack-Backend.git
@@ -43,7 +57,6 @@ cp .env.example .env
 ### 3. Environment Variables (`.env`)
 ```env
 PORT=8000
-SECRET_KEY="supersecretkey-change-this-in-production-use-openssl-rand-hex-32"
 
 # MongoDB
 MONGODB_URL="mongodb://localhost:27017"
@@ -60,12 +73,12 @@ CLOUDFLARE_R2_BUCKET_NAME="app-uploads"
 CLOUDFLARE_R2_PUBLIC_URL="https://pub-xxxxxx.r2.dev"
 ```
 
-### 4. Running the Application
+### 4. Running Scripts
 ```bash
-# Start in development mode (hot reload via tsx)
+# Development mode (hot reload via tsx)
 npm run dev
 
-# Build for production
+# Compile TypeScript
 npm run build
 
 # Start production server
@@ -81,17 +94,9 @@ npm test
 
 All endpoints are prefixed with `/api/v1`:
 
-| Method | Endpoint | Auth | Description |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/` | None | Service info & health summary |
-| `GET` | `/api/v1/health` | None | Detailed health status (MongoDB, Redis, Storage) |
-| `POST` | `/api/v1/auth/register` | None | Register new user |
-| `POST` | `/api/v1/auth/login` | None | Authenticate with email & password |
-| `POST` | `/api/v1/auth/refresh` | None | Refresh access token |
-| `GET` | `/api/v1/auth/me` | Bearer JWT | Get current user profile |
-| `POST` | `/api/v1/auth/logout` | Bearer JWT | Revoke token and logout |
-| `GET` | `/api/v1/users/profile` | Bearer JWT | Get user profile |
-| `PUT` | `/api/v1/users/profile` | Bearer JWT | Update user profile |
-| `POST` | `/api/v1/users/change-password` | Bearer JWT | Change password |
-| `POST` | `/api/v1/storage/upload` | Bearer JWT | Upload file to Cloudflare R2 |
-| `GET` | `/api/v1/storage/presigned-url` | Bearer JWT | Generate presigned access URL |
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `GET` | `/` | Service info & health summary |
+| `GET` | `/api/v1/health` | Comprehensive health check (MongoDB, Redis, Storage) |
+| `POST` | `/api/v1/storage/upload` | Upload file to Cloudflare R2 (field `file`) |
+| `GET` | `/api/v1/storage/presigned-url` | Generate presigned access URL (`?key=...`) |

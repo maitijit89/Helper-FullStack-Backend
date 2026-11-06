@@ -24,3 +24,4 @@ describe('Health and System Status Integration Tests', () => {
     expect(res.body.redis.status).toBeDefined();
   });
 });
+
