@@ -7,8 +7,6 @@ import { redisService } from '../services/redis.service';
 export interface TokenPayload {
   sub: string;
   role: string;
-  roles?: string[];
-  account_type?: string;
   type: 'access' | 'refresh';
   exp?: number;
   iat?: number;
@@ -35,23 +33,47 @@ export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, salt);
 }
 
+export interface CreateTokenOptions {
+  sub: string;
+  role?: string;
+  token_version?: number;
+  expiresInMinutes?: number;
+  expiresInDays?: number;
+}
+
 export function createAccessToken(
-  subject: string,
-  role: string = UserRole.USER,
-  expiresInMinutes?: number,
-  roles?: string[],
-  accountType?: string,
-  tokenVersion?: number
+  optionsOrSub: string | CreateTokenOptions,
+  legacyRole: string = UserRole.USER,
+  legacyExpiresInMinutes?: number,
+  _legacyRoles?: string[],
+  _legacyAccountType?: string,
+  legacyTokenVersion?: number
 ): string {
-  const expiry = (expiresInMinutes ?? env.ACCESS_TOKEN_EXPIRE_MINUTES) * 60;
+  let sub: string;
+  let role: string = UserRole.USER;
+  let tokenVersion: number | undefined;
+  let expiryMinutes = env.ACCESS_TOKEN_EXPIRE_MINUTES;
+
+  if (typeof optionsOrSub === 'object') {
+    sub = optionsOrSub.sub;
+    role = optionsOrSub.role || UserRole.USER;
+    tokenVersion = optionsOrSub.token_version;
+    if (optionsOrSub.expiresInMinutes) expiryMinutes = optionsOrSub.expiresInMinutes;
+  } else {
+    sub = optionsOrSub;
+    role = legacyRole;
+    tokenVersion = legacyTokenVersion;
+    if (legacyExpiresInMinutes) expiryMinutes = legacyExpiresInMinutes;
+  }
+
+  const expiry = expiryMinutes * 60;
   const payload: TokenPayload = {
-    sub: subject,
-    role: role,
-    roles: roles,
-    account_type: accountType,
+    sub,
+    role,
     token_version: tokenVersion,
     type: 'access',
   };
+
   return jwt.sign(payload, env.SECRET_KEY, {
     algorithm: 'HS256',
     expiresIn: expiry,
@@ -59,22 +81,38 @@ export function createAccessToken(
 }
 
 export function createRefreshToken(
-  subject: string,
-  role: string = UserRole.USER,
-  expiresInDays?: number,
-  roles?: string[],
-  accountType?: string,
-  tokenVersion?: number
+  optionsOrSub: string | CreateTokenOptions,
+  legacyRole: string = UserRole.USER,
+  legacyExpiresInDays?: number,
+  _legacyRoles?: string[],
+  _legacyAccountType?: string,
+  legacyTokenVersion?: number
 ): string {
-  const expiry = (expiresInDays ?? env.REFRESH_TOKEN_EXPIRE_DAYS) * 24 * 60 * 60;
+  let sub: string;
+  let role: string = UserRole.USER;
+  let tokenVersion: number | undefined;
+  let expiryDays = env.REFRESH_TOKEN_EXPIRE_DAYS;
+
+  if (typeof optionsOrSub === 'object') {
+    sub = optionsOrSub.sub;
+    role = optionsOrSub.role || UserRole.USER;
+    tokenVersion = optionsOrSub.token_version;
+    if (optionsOrSub.expiresInDays) expiryDays = optionsOrSub.expiresInDays;
+  } else {
+    sub = optionsOrSub;
+    role = legacyRole;
+    tokenVersion = legacyTokenVersion;
+    if (legacyExpiresInDays) expiryDays = legacyExpiresInDays;
+  }
+
+  const expiry = expiryDays * 24 * 60 * 60;
   const payload: TokenPayload = {
-    sub: subject,
-    role: role,
-    roles: roles,
-    account_type: accountType,
+    sub,
+    role,
     token_version: tokenVersion,
     type: 'refresh',
   };
+
   return jwt.sign(payload, env.SECRET_KEY, {
     algorithm: 'HS256',
     expiresIn: expiry,

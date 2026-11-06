@@ -60,6 +60,10 @@ coverage/
 .coverage
 htmlcov/
 
+# Local uploads
+uploads/
+!uploads/.gitkeep
+
 # Deployment & cloud
 .vercel/
 .serverless/

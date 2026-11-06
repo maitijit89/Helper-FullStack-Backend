@@ -1,35 +1,21 @@
-# Helper FullStack Backend (v1.2.1)
+# Node.js 22 + Express + TypeScript Backend Core (v1.2.1)
 
-> Production-ready **Node.js 22 + Express + TypeScript** Backend API for **Quick Commerce**, **Print & Xerox Document Service**, **Porter Parcel Courier (< 5 kg)**, and **Handwritten Assignment Writer**, featuring Delivery Partner Ecosystem with 1 km Ringing Dispatch Algorithm, Razorpay Payment Gateway, Partner Wallet with 48-hour holding periods, **MongoDB**, **Upstash Redis**, **Cloudflare R2 Storage**, and Google Gemini AI Customer Support.
-
----
-
-## Tech Stack & Architecture
-
-- **Runtime**: Node.js 22 LTS (ES2022+ strict TypeScript)
-- **Framework**: Express.js
-- **Database**: MongoDB (Mongoose 8 ODM with connection pooling, index sync, and SRV resolver)
-- **Distributed Cache & Sync**: Upstash Redis (TLS `rediss://` and HTTP REST support with automatic in-memory fallback)
-- **Object Storage**: Cloudflare R2 (S3-compatible API with zero egress fees, presigned URLs, and public CDN support)
-- **Real-Time**: WebSockets (`ws`) for live partner GPS broadcasts and dispatch ringing
-- **AI & Integrations**: Google Gemini AI (`gemini-1.5-flash`), Razorpay, Google Sheets API, Mappls
+A production-ready, clean-architecture backend powered by **Node.js 22**, **Express.js**, and **TypeScript**, configured with:
+- **Database**: MongoDB (Mongoose ODM)
+- **Distributed Cache**: Upstash Redis
+- **Object Storage**: Cloudflare R2 (S3-compatible, zero egress fees)
 
 ---
 
-## Features
+## Architecture & Features
 
-- **Quick Commerce Store**: Fast delivery for snacks, beverages, cakes, and stationery items.
-- **Xerox & Print Service**: Automated PDF page counter with `pdf-parse`, custom color modes (B&W / Color), duplexing, and binding (spiral / channel file).
-- **Porter Parcel Courier (< 5 kg)**: Hyper-local parcel pickup & drop delivery.
-- **Handwritten Assignment Writer**: Assignment page count quotes and document submission.
-- **Delivery Partner Ecosystem**: GPS location tracking, 1 km radius ringing dispatch algorithm, atomic order acceptance, and order tracking.
-- **Partner Wallet & Earnings**: Delivery fee crediting, 48-hour maturity holding period, and manual admin payout processing.
-- **Cloudflare R2 File Uploads**: Product images, document uploads, and identity KYC documents securely stored in Cloudflare R2 buckets.
-- **Upstash Redis Caching**: Token blacklisting, session rate limiting, geo-spatial partner clustering, and high-speed data caching.
-- **Razorpay Integration**: Razorpay Orders, HMAC SHA256 signature verification, and webhooks.
-- **AI Assistant**: Google Gemini AI (`gemini-1.5-flash`) support assistant.
-- **Authentication & Security**: JWT bearer authentication, bcryptjs password hashing, role-based access control (`USER`, `PARTNER`, `ADMIN`), rate limiting.
-- **Realtime WebSockets**: Live order tracking and delivery partner GPS broadcasts.
+- **Runtime & Language**: Node.js 22 LTS with strict TypeScript (`ES2022`).
+- **Web Framework**: Express.js with Helmet security headers, CORS, compression, Morgan logging, and rate limiting.
+- **Database**: MongoDB via Mongoose 8 with connection pooling, DNS SRV resolution, index auto-synchronization, and graceful disconnect.
+- **Cache**: Upstash Redis with TLS connection (`rediss://`), connection pooling, auto-reconnect, and local in-memory fallback.
+- **Object Storage**: Cloudflare R2 storage integration (`@aws-sdk/client-s3`) supporting multipart uploads, custom CDN domain public URLs, and presigned URLs.
+- **Authentication**: JWT authentication with access/refresh tokens, password hashing with `bcryptjs`, and Redis token blacklisting.
+- **Centralized Error Handling**: Custom error hierarchy (`AppError`, `BadRequestException`, `UnauthorizedException`, `NotFoundException`, etc.) and Zod schema validation middleware.
 
 ---
 
@@ -37,9 +23,9 @@
 
 ### 1. Prerequisites
 - **Node.js** >= 22.0.0
-- **MongoDB** (Local instance or MongoDB Atlas)
-- **Upstash Redis** (or local Redis - optional, graceful in-memory fallback included)
-- **Cloudflare R2** (or AWS S3 / local static storage fallback)
+- **MongoDB** (Local or MongoDB Atlas)
+- **Upstash Redis** (or local Redis, optional in-memory fallback)
+- **Cloudflare R2 Bucket** (optional local filesystem fallback)
 
 ### 2. Installation
 ```bash
@@ -50,24 +36,42 @@ cd Helper-FullStack-Backend
 # Install dependencies
 npm install
 
-# Setup environment variables
+# Copy environment variables
 cp .env.example .env
 ```
 
-### 3. Running Locally
-```bash
-# Development server (with hot reload via tsx)
-npm run dev
+### 3. Environment Variables (`.env`)
+```env
+PORT=8000
+SECRET_KEY="supersecretkey-change-this-in-production-use-openssl-rand-hex-32"
 
-# Compile TypeScript
-npm run build
+# MongoDB
+MONGODB_URL="mongodb://localhost:27017"
+MONGODB_DB_NAME="app_db"
 
-# Start Production server
-npm start
+# Upstash Redis
+REDIS_URL="rediss://default:your-upstash-password@your-upstash-db.upstash.io:6379"
+
+# Cloudflare R2
+CLOUDFLARE_R2_ACCOUNT_ID="your-cloudflare-account-id"
+CLOUDFLARE_R2_ACCESS_KEY_ID="your-r2-access-key-id"
+CLOUDFLARE_R2_SECRET_ACCESS_KEY="your-r2-secret-access-key"
+CLOUDFLARE_R2_BUCKET_NAME="app-uploads"
+CLOUDFLARE_R2_PUBLIC_URL="https://pub-xxxxxx.r2.dev"
 ```
 
-### 4. Running Tests
+### 4. Running the Application
 ```bash
+# Start in development mode (hot reload via tsx)
+npm run dev
+
+# Build for production
+npm run build
+
+# Start production server
+npm start
+
+# Run test suites
 npm test
 ```
 
@@ -77,30 +81,17 @@ npm test
 
 All endpoints are prefixed with `/api/v1`:
 
-| Module | Route Prefix | Description |
-| :--- | :--- | :--- |
-| **Health** | `GET /api/v1/health` | Service and Database health check |
-| **Auth** | `/api/v1/auth/*` | Register, Login, Refresh, Me, OTP verify, Forgot Password |
-| **Users** | `/api/v1/users/*` | Profile update, GPS location update, Password change |
-| **Partner** | `/api/v1/partner/*` | Onboarding, Location update, Available orders, Order acceptance |
-| **Admin** | `/api/v1/admin/*` | User/Partner moderation, Orders, Withdrawals, KYC approval |
-| **Dashboard** | `/api/v1/admin/dashboard` | Real-time analytics, revenue, order velocities |
-| **Products** | `/api/v1/products/*` | Product catalog CRUD, search, and category filter |
-| **Orders** | `/api/v1/orders/*` | Place orders, Order tracking, Cancel order, Rating |
-| **Payments** | `/api/v1/payments/*` | Razorpay order generation, HMAC verification, Webhook |
-| **Cart** | `/api/v1/cart/*` | Customer bucket/cart operations |
-| **Print** | `/api/v1/print/*` | Document upload, PDF page counting, Print price calculator |
-| **Assignment** | `/api/v1/assignment-service/*` | Assignment writing quote, file upload |
-| **AI Chat** | `/api/v1/ai/chat` | Google Gemini AI customer support |
-| **Support** | `/api/v1/support/*` | Customer support ticket submission and tracking |
-| **Wallet** | `/api/v1/wallet/*` | Partner balance, withdrawable funds, payout requests |
-| **WebSockets** | `ws://host:port/api/v1/ws` | Live GPS location broadcast and ringing dispatch |
-
----
-
-## Deployment
-
-### Docker
-```bash
-docker-compose up --build -d
-```
+| Method | Endpoint | Auth | Description |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/` | None | Service info & health summary |
+| `GET` | `/api/v1/health` | None | Detailed health status (MongoDB, Redis, Storage) |
+| `POST` | `/api/v1/auth/register` | None | Register new user |
+| `POST` | `/api/v1/auth/login` | None | Authenticate with email & password |
+| `POST` | `/api/v1/auth/refresh` | None | Refresh access token |
+| `GET` | `/api/v1/auth/me` | Bearer JWT | Get current user profile |
+| `POST` | `/api/v1/auth/logout` | Bearer JWT | Revoke token and logout |
+| `GET` | `/api/v1/users/profile` | Bearer JWT | Get user profile |
+| `PUT` | `/api/v1/users/profile` | Bearer JWT | Update user profile |
+| `POST` | `/api/v1/users/change-password` | Bearer JWT | Change password |
+| `POST` | `/api/v1/storage/upload` | Bearer JWT | Upload file to Cloudflare R2 |
+| `GET` | `/api/v1/storage/presigned-url` | Bearer JWT | Generate presigned access URL |

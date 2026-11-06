@@ -4,13 +4,11 @@ import helmet from 'helmet';
 import compression from 'compression';
 import morgan from 'morgan';
 import path from 'path';
-import swaggerUi from 'swagger-ui-express';
 import { env } from './config/env';
 import { connectDB } from './config/database';
 import { logger } from './config/logger';
 import { errorHandler } from './middlewares/errorHandler';
 import { standardRateLimiter } from './middlewares/rateLimiter';
-import { swaggerDocument } from './docs/swagger';
 import apiRouter from './routes';
 
 export function createApp(): Express {
@@ -30,14 +28,12 @@ export function createApp(): Express {
   app.use(
     helmet({
       crossOriginResourcePolicy: false,
-      contentSecurityPolicy: false, // Allow Swagger UI inline scripts & assets
     })
   );
 
   app.use(
     cors({
       origin: (origin, callback) => {
-        // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
         if (!origin) return callback(null, true);
         if (
           env.BACKEND_CORS_ORIGINS.includes('*') ||
@@ -72,15 +68,8 @@ export function createApp(): Express {
   // Standard Rate Limiter
   app.use(standardRateLimiter);
 
-  // Static files for uploaded assets
+  // Static files for local uploaded assets fallback
   app.use('/static', express.static(path.resolve('uploads')));
-
-  // Swagger Documentation & OpenAPI JSON
-  app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-  app.use(`${env.API_V1_STR}/docs`, swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-  app.get(`${env.API_V1_STR}/openapi.json`, (req: Request, res: Response) => {
-    res.status(200).json(swaggerDocument);
-  });
 
   // Root endpoint
   app.get('/', (req: Request, res: Response) => {
@@ -90,11 +79,10 @@ export function createApp(): Express {
       runtime: `Node.js 22 (${process.version})`,
       framework: 'Express.js + TypeScript',
       environment: env.ENVIRONMENT,
-      docs: '/docs',
       health: `${env.API_V1_STR}/health`,
       database: 'MongoDB (Mongoose ODM)',
-      cache: 'Upstash / Redis',
-      storage: 'Cloudflare R2 (S3-compatible)',
+      cache: 'Upstash Redis',
+      storage: 'Cloudflare R2',
     });
   });
 
