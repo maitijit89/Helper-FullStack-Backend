@@ -58,6 +58,8 @@ Complete formal engineering documentation has been authored in the project root:
 3. **Algorithm 3 (Contextual Accessory & Chained Cross-Sell)**:
    - When viewing an iPhone $\rightarrow$ suggests essential Fast Charger and recommended Case.
    - When user adds the Case to their purchase list $\rightarrow$ dynamically activates **Chained Accessory Expansion** to discover Screen Protectors, Lens Guards, MagSafe Wallets, and bundle discounts!
+4. **Algorithm 4 (3-Day Registration Abandonment Reminder Engine)**: Recovers dropped signups by detecting unverified applicants after 3 days and dropping a fresh OTP and activation reminder.
+5. **Algorithm 5 (Intelligent Multi-Field Product Search Engine)**: Multi-field weighted scoring (SKU, title, brand, category, tags), Damerau-Levenshtein typo tolerance (*"iphne"* $\rightarrow$ *"iphone"*, *"chagre"* $\rightarrow$ *"charger"*), academic & cart dwell boost synergy, dynamic facet extraction, autocomplete typeahead, and non-blocking search analytics.
 
 ### 6. Sub-Backend Integration (User Analysis Engine)
 - Dedicated internal API (`/api/v1/internal/user-analysis/*`) protected by `x-engine-secret`.
@@ -102,10 +104,15 @@ All endpoints are mounted under `/api/v1`:
 | `DELETE` | `/api/v1/admin/products/:id` | Soft delete product | Yes (`admin`) |
 | `POST` | `/api/v1/admin/products/:id/accessories` | Link compatible accessories to product | Yes (`admin`) |
 
-### Product Catalog & Personalized Feed (`/api/v1/products`)
+### Product Catalog, Search & Personalized Feed (`/api/v1/products`)
 
 | Method | Endpoint | Description | Auth Required |
 | :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/products/search` | Intelligent multi-field search with typo tolerance, dynamic facets & personalization | Optional (`Bearer`) |
+| `GET` | `/api/v1/products/search/suggest` | Autocomplete / typeahead suggestions (products, categories, brands) | No |
+| `GET` | `/api/v1/products/search/trending` | Trending search queries aggregated over 7-day window | No |
+| `GET` | `/api/v1/products/search/recent` | Authenticated user recent search history | Yes (`Bearer`) |
+| `DELETE` | `/api/v1/products/search/recent` | Clear authenticated user search history | Yes (`Bearer`) |
 | `GET` | `/api/v1/products/feed` | Personalized feed (Algos 1 & 2 + Sub-Backend) | Optional (`Bearer`) |
 | `GET` | `/api/v1/products` | Search and filter catalog | No |
 | `GET` | `/api/v1/products/:id` | View product details (logs view event) | Optional (`Bearer`) |
@@ -145,6 +152,6 @@ npm run dev
 # 4. Compile TypeScript
 npm run build
 
-# 5. Run test suites (31/31 passing across all 3 databases & algorithms)
+# 5. Run test suites (47/47 passing across all 3 databases & algorithms)
 npm test
 ```

@@ -166,3 +166,50 @@ sequenceDiagram
 
     Note over Main: Next user feed request immediately reflects<br/>the +70 point boost for Books!
 ```
+
+---
+
+## 7. Intelligent Product Search Execution Pipeline (Algorithm 5)
+
+```mermaid
+flowchart TD
+    UserQuery["User Input Query String<br/>e.g. 'iphne fast chagre'"] --> Tokenizer["Tokenize, Lowercase & Strip Punctuation<br/>Tokens: ['iphne', 'fast', 'chagre']"]
+    
+    Tokenizer --> VocabBuild["Extract Active Vocabulary from Catalog DB<br/>(Titles, Brands, Categories, Tags)"]
+    VocabBuild --> TypoEngine{"Damerau-Levenshtein Check<br/>dL <= 2 & sim >= 0.75"}
+    
+    TypoEngine -- "Typo Detected" --> AutoCorrect["Corrected Tokens<br/>['iphone', 'fast', 'charger']<br/>correctedQuery: 'iphone fast charger'"]
+    TypoEngine -- "Exact Match" --> ExactTokens["Effective Query Tokens"]
+    AutoCorrect --> CombinedTokens["Consolidated Token Pool"]
+    ExactTokens --> CombinedTokens
+    
+    CombinedTokens --> CandidateFilter["Catalog DB Primary Filter<br/>(isActive=true, price, inStock, brand, category)"]
+    
+    subgraph MultiFieldScoring ["Multi-Field Weighted Scoring Matrix"]
+        CandidateFilter --> SKU["Exact SKU Match (+50.0)"]
+        CandidateFilter --> Title["Title Word (+10.0) / Prefix (+5.0) / Fuzzy (+6.0 * sim)"]
+        CandidateFilter --> Brand["Brand Match (+8.0)"]
+        CandidateFilter --> Category["Category & SubCategory (+7.0)"]
+        CandidateFilter --> Tags["Tags Match (+5.0 per tag)"]
+        CandidateFilter --> Desc["Description Substring (+1.5)"]
+    end
+    
+    subgraph PersonalizationBoosts ["Cross-Database Personalization & Dwell Synergy"]
+        UserContext["User Authentication Context"] --> Academic["Academic Alignment<br/>Course (+10.0) & Dept (+10.0) from Core DB"]
+        UserContext --> CartDwell["Algorithm 2 Cart Dwell Synergy<br/>(+25.0 if category dwelling >= 15 mins) from Analytics DB"]
+        UserContext --> Affinity["Category Affinity Weight<br/>(min 15.0, affinity * 0.3) from Analytics DB"]
+    end
+    
+    MultiFieldScoring --> CompositeScore["Composite Score Summation"]
+    PersonalizationBoosts --> CompositeScore
+    
+    CompositeScore --> BusinessAdjust["Business Adjustments<br/>In-Stock (+10.0) / Out-of-Stock (-15.0)<br/>Popularity & Featured (+5.0)"]
+    
+    BusinessAdjust --> DynamicFacets["Dynamic Facet Aggregation<br/>(Categories, Brands, Tags, Price Range [min, max])"]
+    BusinessAdjust --> SortPaginate["Sort (Relevance, Price, Popularity, Newest)<br/>& Apply Pagination (Page, Limit)"]
+    
+    SortPaginate --> SearchResponse["HTTP 200 JSON Response<br/>(data, facets, correctedQuery, pagination)"]
+    
+    SearchResponse --> AsyncLog["Async Analytics DB Logging<br/>(SearchHistory & ProductEvent)"]
+```
+

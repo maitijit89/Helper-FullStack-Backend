@@ -178,3 +178,78 @@ Prevent user drop-off when an applicant fills out their complete registration fo
    - Increment $r.\text{reminderCount} \leftarrow r.\text{reminderCount} + 1$.
    - Save document.
    - Dispatch HTML/text reminder email via Nodemailer.
+
+---
+
+## Algorithm 5: Intelligent Multi-Field Product Search, Typo Tolerance, & Dynamic Facet Engine
+
+### 5.1 Objective
+Deliver a lightning-fast, fault-tolerant, and context-aware product search system that understands user intent, forgives typos (e.g., *"iphne"* $\rightarrow$ *"iphone"*, *"chagre"* $\rightarrow$ *"charger"*), personalizes rankings according to academic curriculum and cart dwell state, extracts multi-dimensional facets dynamically, and logs search history for trending analytics.
+
+### 5.2 Mathematical & Algorithmic Formulation
+
+#### 1. Damerau-Levenshtein Typo Distance & Similarity Ratio
+For query token $a$ and vocabulary term $b$, the edit distance $d_{L}(a, b)$ accounts for insertions, deletions, substitutions, and transpositions of adjacent characters:
+
+$$d_{L}(a, b) = \min \begin{cases}
+0 & \text{if } i=0, j=0 \\
+i & \text{if } j=0 \\
+j & \text{if } i=0 \\
+D(i-1, j) + 1 & \text{deletion} \\
+D(i, j-1) + 1 & \text{insertion} \\
+D(i-1, j-1) + \mathbb{I}(a[i] \ne b[j]) & \text{substitution} \\
+D(i-2, j-2) + 1 & \text{transposition if } a[i]=b[j-1] \text{ and } a[i-1]=b[j]
+\end{cases}$$
+
+The normalized similarity ratio $\text{sim}(a, b)$ is formulated as:
+
+$$\text{sim}(a, b) = 1.0 - \frac{d_{L}(a, b)}{\max(|a|, |b|)}$$
+
+A vocabulary candidate is accepted as a typo replacement if:
+$$d_{L}(a, b) \le 2 \quad \land \quad \text{sim}(a, b) \ge 0.75$$
+
+#### 2. Composite Multi-Field Relevance Score Matrix
+For a candidate product $P$ and search query tokens $\mathcal{T} = \{t_1, t_2, \dots, t_k\}$, the final search score $\mathcal{S}_{\text{search}}(u, P, \mathcal{T})$ is computed as:
+
+$$\mathcal{S}_{\text{search}}(u, P, \mathcal{T}) = S_{\text{relevance}}(P, \mathcal{T}) + S_{\text{personalization}}(u, P) + S_{\text{business}}(P)$$
+
+**Field Relevance Weight Matrix ($S_{\text{relevance}}$)**:
+- **Exact SKU Match**: $+50.0$ if $q_{\text{raw}} = P.\text{sku}$
+- **Title Field Matching**:
+  - Exact word match: $+10.0$ per matched token
+  - Prefix match: $+5.0$ per matched token
+  - Substring match: $+3.0$ per matched token
+  - Fuzzy word match: $+6.0 \cdot \text{sim}(t, w)$ if $\text{sim} \ge 0.75$
+- **Brand Match**: $+8.0$ if $t = P.\text{brand}$
+- **Category & SubCategory Match**: $+7.0$ if $t \in \{P.\text{cat}, P.\text{subCat}\}$
+- **Tags Match**: $+5.0$ per matching tag
+- **Description Match**: $+1.5$ per substring match
+
+**Personalization Factors ($S_{\text{personalization}}$)**:
+- Academic Course Alignment (UG/PG): $+10.0$
+- Academic Department Alignment: $+10.0$
+- Category Affinity Weight: $+\min(15.0, \, 0.3 \cdot \mathcal{A}_{\text{cat}}(u, P.\text{cat}))$
+- **Cart Dwell Urgency Synergy (Algorithm 2)**: $+25.0$ if $P.\text{category}$ is currently dwelling in user's active cart $\ge 15$ minutes!
+
+**Business & Operational Adjustments ($S_{\text{business}}$)**:
+- In-Stock Availability: $+10.0$ ($P.\text{stock} > 0$), or $-15.0$ penalty ($P.\text{stock} = 0$)
+- Sales & View Count: $+\min(10.0, \, 1.2 \cdot P.\text{sales} + 0.05 \cdot P.\text{views})$
+- Featured Promotion: $+5.0$ if $P.\text{isFeatured} = \text{true}$
+
+### 5.3 Dynamic Facet Extraction
+In a single execution pass over matched candidate products, dynamic facets are generated:
+- $\mathcal{F}_{\text{categories}}$: Distinct categories with product frequency counts $\left(c_i, n_i\right)$
+- $\mathcal{F}_{\text{brands}}$: Distinct brands with product frequency counts $\left(b_i, n_i\right)$
+- $\mathcal{F}_{\text{tags}}$: Top 15 matching tags sorted by frequency
+- $\mathcal{F}_{\text{priceRange}}$: Extreme lower and upper bounds $[\min(\text{price}), \max(\text{price})]$
+
+### 5.4 Autocomplete / Typeahead Engine
+Evaluates keystroke prefixes $\ge 1$ char:
+- Executes indexed regex on `Product.title`, `Product.category`, `Product.brand`, and `Product.tags`
+- Returns top 8 product previews, top 4 categories, and top 4 brands with instantaneous response times ($< 15$ ms)
+
+### 5.5 Trending & Search Analytics Pipeline
+1. Every search execution is asynchronously recorded in Analytics DB (`SearchHistory` collection) without adding latency to the search response.
+2. Trending searches aggregate normalized queries over a sliding 7-day window:
+   $$\text{Trending} = \text{Top}_{N}\left(\sum_{\tau \ge \tau_{\text{now}} - 7d} \mathbb{I}(\text{normalizedQuery} = q)\right)$$
+3. Authenticated users can retrieve their deduplicated recent search history and selectively clear it.

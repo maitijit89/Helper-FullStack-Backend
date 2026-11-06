@@ -131,3 +131,39 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - The User Analysis Engine can post refined user segments, category boost lists, category suppress lists, and custom weight overrides via `POST /api/v1/internal/user-analysis/sync`.
 - The Main Backend writes these instructions directly into the **Analytics DB** (`UserInterestProfile`), immediately affecting real-time feed rankings.
 - The User Analysis Engine can read historical interaction events via `GET /api/v1/internal/user-analysis/events` with pagination and date filters.
+
+---
+
+## 7. Intelligent Product Search Rules (Algorithm 5)
+
+### Rule 7.1: Multi-Field Weighted Scoring Matrix
+- Product search queries are tokenized, normalized to lowercase, and stripped of non-alphanumeric punctuation.
+- Field weights are strictly enforced:
+  1. **Exact SKU Match**: $+50.0$ points.
+  2. **Title Word**: $+10.0$ (exact word), $+5.0$ (prefix match), $+3.0$ (substring), $+6.0 \times \text{sim}$ (fuzzy).
+  3. **Brand**: $+8.0$ points.
+  4. **Category & SubCategory**: $+7.0$ points.
+  5. **Tags**: $+5.0$ points per matched tag.
+  6. **Description**: $+1.5$ points per substring occurrence.
+
+### Rule 7.2: Typo Tolerance & Fuzzy Matching
+- The search system automatically derives an active vocabulary dictionary from all published catalog titles, brands, categories, and tags.
+- Any query token not found in the vocabulary undergoes Damerau-Levenshtein edit distance comparison.
+- A typo correction is accepted if $d_L \le 2$ and normalized similarity ratio $\ge 0.75$.
+- Corrected terms are included in search execution alongside original tokens, and `correctedQuery` is surfaced in the API response (e.g., *"iphne"* $\rightarrow$ *"iphone"*, *"chagre"* $\rightarrow$ *"charger"*).
+
+### Rule 7.3: Academic & Cart Dwell Personalization Synergy
+- When an authenticated student executes a search:
+  - Matches against `user.course` (UG/PG) award $+10.0$ points.
+  - Matches against `user.department` award $+10.0$ points.
+  - Category affinity weights contribute up to $+15.0$ points.
+  - **Cart Dwell Urgency Synergy**: If any item in the searched product's category has been dwelling in the user's cart for $\ge 15$ minutes, the product receives an immediate $+25.0$ priority boost.
+
+### Rule 7.4: Dynamic Facets & Filters
+- Every search returns dynamic facet metadata (matching categories, brands, top 15 tags, and computed `priceRange` $[min, max]$).
+- Search results can be filtered by `category`, `brand`, `minPrice`, `maxPrice`, `inStockOnly`, and sorted by `relevance`, `price_asc`, `price_desc`, `popular`, or `newest`.
+
+### Rule 7.5: Search Analytics, Trending & Privacy
+- Every search query is asynchronously dispatched to the **Analytics DB** (`SearchHistory` collection) without blocking the HTTP response.
+- `GET /api/v1/products/search/trending` computes top queries over the trailing 7 days using MongoDB aggregation.
+- Authenticated users can retrieve their deduplicated recent searches (`GET /api/v1/products/search/recent`) and permanently erase their search history (`DELETE /api/v1/products/search/recent`).

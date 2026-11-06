@@ -129,6 +129,7 @@ The system utilizes a single clustered connection pool with logical database seg
 |   - Cart: Active cart items with granular `addedAt` timestamps for dwell time computation.         |
 |   - UserInterestProfile: Category affinities, tag weights, and sub-backend instruction overrides.  |
 |   - ProductEvent: Raw interaction telemetry (views, cart adds, accessory clicks, purchases).      |
+|   - SearchHistory: Search queries, timestamps, normalized tokens, and result counts for trending.  |
 +----------------------------------------------------------------------------------------------------+
 ```
 
@@ -168,3 +169,18 @@ The Main Backend is designed to act as the primary operational coordinator while
    - Accessories are structured as directed relationships on the `Product` model.
    - When a primary product is added, Tier-1 accessories are fetched.
    - When any accessory is added, the graph traverses one level deeper to discover complementary peripherals, creating an automated cross-sell expansion chain.
+
+---
+
+## 5. Intelligent Search Subsystem Architecture
+
+1. **Cross-Database Synergy**:
+   - Catalog DB provides product text vectors (title, SKU, brand, category, tags, description).
+   - Core DB provides student identity vectors (course: UG/PG, department).
+   - Analytics DB provides cart dwell states and historical category affinity weights.
+2. **Damerau-Levenshtein Fuzzy Spell Correction**:
+   - Dynamic vocabulary extraction from the catalog avoids external dictionary bloat.
+   - Detects single/double character transpositions, deletions, insertions, or substitutions ($d_L \le 2$).
+3. **Non-Blocking Search Analytics**:
+   - Search events are recorded asynchronously in `SearchHistory` without introducing latency to search API responses.
+   - Indexed compound queries enable high-performance trending aggregations over 7-day windows.
