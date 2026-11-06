@@ -1,5 +1,6 @@
-import mongoose, { Document, Schema, Model } from 'mongoose';
+import { Document, Schema, Model } from 'mongoose';
 import { Gender } from './User';
+import { getCoreDb } from '../config/database';
 
 export interface IPendingRegistration extends Document {
   name: string;
@@ -20,7 +21,7 @@ export interface IPendingRegistration extends Document {
   updatedAt: Date;
 }
 
-const PendingRegistrationSchema = new Schema<IPendingRegistration>(
+export const PendingRegistrationSchema = new Schema<IPendingRegistration>(
   {
     name: {
       type: String,
@@ -100,5 +101,5 @@ const PendingRegistrationSchema = new Schema<IPendingRegistration>(
 PendingRegistrationSchema.index({ status: 1, lastReminderSentAt: 1 });
 
 export const PendingRegistration: Model<IPendingRegistration> =
-  mongoose.models.PendingRegistration ||
-  mongoose.model<IPendingRegistration>('PendingRegistration', PendingRegistrationSchema);
+  getCoreDb().models.PendingRegistration ||
+  getCoreDb().model<IPendingRegistration>('PendingRegistration', PendingRegistrationSchema);

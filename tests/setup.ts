@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { getCoreDb, getCatalogDb, getAnalyticsDb } from '../src/config/database';
 
 let mongoServer: MongoMemoryServer | null = null;
 
@@ -35,9 +36,12 @@ afterAll(async () => {
 
 afterEach(async () => {
   if (mongoose.connection.readyState === 1) {
-    const collections = mongoose.connection.collections;
-    for (const key in collections) {
-      await collections[key].deleteMany({});
+    const dbs = [getCoreDb(), getCatalogDb(), getAnalyticsDb()];
+    for (const db of dbs) {
+      const collections = db.collections;
+      for (const key in collections) {
+        await collections[key].deleteMany({});
+      }
     }
   }
 });

@@ -2,20 +2,36 @@ import { Router } from 'express';
 import healthRouter from './health.route';
 import authRouter from './auth.route';
 import userRouter from './user.route';
+import adminProductRouter from './admin-product.route';
+import productRouter from './product.route';
+import cartRouter from './cart.route';
+import internalAnalysisRouter from './internal-analysis.route';
 import { reminderService } from '../services/reminder.service';
 
 const apiRouter = Router();
 
-// Health Check
+// 1. Health Check
 apiRouter.use('/', healthRouter);
 
-// Authentication & Registration
+// 2. Authentication & Registration
 apiRouter.use('/auth', authRouter);
 
-// User Profile Management
+// 3. User Profile Management
 apiRouter.use('/users', userRouter);
 
-// Internal/Worker endpoint to trigger pending registration 3-day reminder checks
+// 4. Admin Product Management (Admin Panel Uploads & Accessory Linking)
+apiRouter.use('/admin/products', adminProductRouter);
+
+// 5. Product Catalog & Personalized Feed (User App Listing System)
+apiRouter.use('/products', productRouter);
+
+// 6. User Cart & Dwell Time Intent Tracking
+apiRouter.use('/cart', cartRouter);
+
+// 7. Sub-Backend User Analysis Engine Interface
+apiRouter.use('/internal/user-analysis', internalAnalysisRouter);
+
+// 8. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
 apiRouter.post('/reminders/run', async (_req, res, next) => {
   try {
     const result = await reminderService.processPendingReminders();

@@ -1,4 +1,5 @@
-import mongoose, { Document, Schema, Model } from 'mongoose';
+import { Document, Schema, Model } from 'mongoose';
+import { getCoreDb } from '../config/database';
 
 export type UserRole = 'user' | 'partner' | 'admin';
 export type Gender = 'male' | 'female' | 'other';
@@ -26,7 +27,7 @@ export interface IUser extends Document {
   updatedAt: Date;
 }
 
-const UserSchema = new Schema<IUser>(
+export const UserSchema = new Schema<IUser>(
   {
     name: {
       type: String,
@@ -142,4 +143,5 @@ UserSchema.pre(/^find/, function (this: any, next) {
   next();
 });
 
-export const User: Model<IUser> = mongoose.models.User || mongoose.model<IUser>('User', UserSchema);
+export const User: Model<IUser> =
+  getCoreDb().models.User || getCoreDb().model<IUser>('User', UserSchema);

@@ -62,3 +62,30 @@ export function authorizeRole(...roles: UserRole[]) {
     next();
   };
 }
+
+export async function optionalAuth(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return next();
+  }
+
+  const token = authHeader.split(' ')[1];
+  if (!token) return next();
+
+  try {
+    const isBlacklisted = await redisService.get(`blacklist:${token}`);
+    if (isBlacklisted) return next();
+
+    const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload;
+    const user = await User.findById(decoded.id);
+    if (user && !user.isDeleted) {
+      req.user = user;
+      req.token = token;
+    }
+  } catch {
+    // Proceed as guest if optional auth token fails
+  }
+
+  next();
+}
+

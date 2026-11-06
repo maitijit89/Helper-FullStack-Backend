@@ -1,4 +1,5 @@
-import mongoose, { Document, Schema, Model } from 'mongoose';
+import { Document, Schema, Model } from 'mongoose';
+import { getCoreDb } from '../config/database';
 
 export type OtpPurpose = 'login' | 'change_mobile';
 
@@ -12,7 +13,7 @@ export interface IOtpVerification extends Document {
   createdAt: Date;
 }
 
-const OtpVerificationSchema = new Schema<IOtpVerification>(
+export const OtpVerificationSchema = new Schema<IOtpVerification>(
   {
     identifier: {
       type: String,
@@ -50,5 +51,5 @@ const OtpVerificationSchema = new Schema<IOtpVerification>(
 OtpVerificationSchema.index({ identifier: 1, purpose: 1 });
 
 export const OtpVerification: Model<IOtpVerification> =
-  mongoose.models.OtpVerification ||
-  mongoose.model<IOtpVerification>('OtpVerification', OtpVerificationSchema);
+  getCoreDb().models.OtpVerification ||
+  getCoreDb().model<IOtpVerification>('OtpVerification', OtpVerificationSchema);

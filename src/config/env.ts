@@ -46,11 +46,18 @@ export const env = {
   SMTP_FROM: process.env.SMTP_FROM || 'Helping Services <noreply@helpingservices.com>',
   SMTP_SECURE: process.env.SMTP_SECURE === 'true',
 
-  // Database (MongoDB)
+  // Database (MongoDB) - 3 Interconnected Logical Databases
   MONGODB_URL: process.env.MONGODB_URL || 'mongodb://localhost:27017',
   MONGODB_DB_NAME: process.env.MONGODB_DB_NAME || 'helping_services_db',
+  MONGODB_CORE_DB_NAME: process.env.MONGODB_CORE_DB_NAME || 'helping_services_core',
+  MONGODB_CATALOG_DB_NAME: process.env.MONGODB_CATALOG_DB_NAME || 'helping_services_catalog',
+  MONGODB_ANALYTICS_DB_NAME: process.env.MONGODB_ANALYTICS_DB_NAME || 'helping_services_analytics',
   MONGODB_MAX_POOL_SIZE: parseInt(process.env.MONGODB_MAX_POOL_SIZE || '50', 10),
   MONGODB_MIN_POOL_SIZE: parseInt(process.env.MONGODB_MIN_POOL_SIZE || '10', 10),
+
+  // Sub-Backend Integration (User Analysis Engine)
+  ANALYSIS_ENGINE_SECRET: process.env.ANALYSIS_ENGINE_SECRET || 'helping-services-analysis-engine-secret-2026',
+  CART_DWELL_BOOST_MINUTES: parseInt(process.env.CART_DWELL_BOOST_MINUTES || '15', 10),
 
   // Cache: Upstash Redis
   REDIS_URL: process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL || '',
