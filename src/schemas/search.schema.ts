@@ -54,3 +54,4 @@ export const suggestQuerySchema = z.object({
 
 export type SearchQueryParams = z.infer<typeof searchQuerySchema>;
 export type SuggestQueryParams = z.infer<typeof suggestQuerySchema>;
+
