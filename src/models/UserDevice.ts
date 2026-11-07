@@ -138,3 +138,4 @@ UserDeviceSchema.index({ timestamp: -1 });
 export const UserDevice: Model<IUserDevice> =
   getAnalyticsDb().models.UserDevice ||
   getAnalyticsDb().model<IUserDevice>('UserDevice', UserDeviceSchema);
+

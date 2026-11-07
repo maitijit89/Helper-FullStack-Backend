@@ -24,21 +24,51 @@ class EmailService {
   private initializeTransporter(): void {
     if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASS) {
       try {
-        this.transporter = nodemailer.createTransport({
-          host: env.SMTP_HOST,
-          port: env.SMTP_PORT,
-          secure: env.SMTP_SECURE,
-          auth: {
-            user: env.SMTP_USER,
-            pass: env.SMTP_PASS,
-          },
-        });
-        logger.info(`SMTP Transporter initialized for host: ${env.SMTP_HOST}:${env.SMTP_PORT}`);
+        const isGmail = env.SMTP_HOST.toLowerCase().includes('gmail');
+        const cleanPass = env.SMTP_PASS.replace(/\s+/g, '');
+
+        this.transporter = nodemailer.createTransport(
+          isGmail
+            ? {
+                service: 'gmail',
+                auth: {
+                  user: env.SMTP_USER,
+                  pass: cleanPass,
+                },
+              }
+            : {
+                host: env.SMTP_HOST,
+                port: env.SMTP_PORT,
+                secure: env.SMTP_SECURE,
+                auth: {
+                  user: env.SMTP_USER,
+                  pass: cleanPass,
+                },
+              }
+        );
+        logger.info(
+          `SMTP Transporter initialized for ${isGmail ? 'Gmail service' : `host: ${env.SMTP_HOST}:${env.SMTP_PORT}`}`
+        );
       } catch (err: any) {
         logger.warn(`Failed to initialize SMTP transporter: ${err.message}. Using console/memory fallback.`);
       }
     } else {
       logger.info('SMTP not configured or in test/dev mode. Emails will be logged to console/memory.');
+    }
+  }
+
+  async verifyConnection(): Promise<boolean> {
+    if (!this.transporter) {
+      logger.warn('Cannot verify SMTP connection: Transporter is not initialized.');
+      return false;
+    }
+    try {
+      await this.transporter.verify();
+      logger.info('SMTP connection successfully verified with mail server.');
+      return true;
+    } catch (err: any) {
+      logger.error(`SMTP verification failed: ${err.message}`);
+      return false;
     }
   }
 

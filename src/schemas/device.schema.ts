@@ -49,3 +49,4 @@ export const deviceStreamQuerySchema = z.object({
 export type RecordDeviceInput = z.infer<typeof recordDeviceSchema>;
 export type DeviceAnalyticsQueryParams = z.infer<typeof deviceAnalyticsQuerySchema>;
 export type DeviceStreamQueryParams = z.infer<typeof deviceStreamQuerySchema>;
+
