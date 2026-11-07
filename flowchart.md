@@ -213,3 +213,67 @@ flowchart TD
     SearchResponse --> AsyncLog["Async Analytics DB Logging<br/>(SearchHistory & ProductEvent)"]
 ```
 
+---
+
+## 8. App & Partner Rating Prompt Scheduling & Re-Prompt Flowchart (Algorithm 6)
+
+```mermaid
+flowchart TD
+    UserLaunch["User Opens App / Navigates Screen"] --> CheckStatus["GET /api/v1/ratings/prompt-status<br/>(targetType: 'app' | 'partner')"]
+    
+    CheckStatus --> QueryUser["Fetch user.createdAt from Core DB<br/>Fetch RatingPromptState from Analytics DB"]
+    
+    QueryUser --> HasSubmitted{"hasSubmitted == true?"}
+    HasSubmitted -- "Yes" --> NeverShow["shouldPrompt: false<br/>(reason: 'already_submitted')<br/>NEVER SHOW AGAIN"]
+    
+    HasSubmitted -- "No" --> CheckRegTime{"now - user.createdAt >= 2 Days<br/>(48 hours)?"}
+    CheckRegTime -- "No (< 48 hrs)" --> RegCooldown["shouldPrompt: false<br/>(reason: 'registration_cooldown')<br/>Wait until 2 days pass"]
+    
+    CheckRegTime -- "Yes (>= 48 hrs)" --> CheckDismissed{"Was prompt previously<br/>ignored / dismissed?"}
+    
+    CheckDismissed -- "Never Dismissed" --> ShowInitial["shouldPrompt: true<br/>(reason: 'eligible_initial_prompt')<br/>Show Rating Dialog with 1-5 Stars"]
+    
+    CheckDismissed -- "Previously Dismissed" --> CheckWeek{"now - lastDismissedAt >= 7 Days<br/>(1 week)?"}
+    CheckWeek -- "No (< 7 days)" --> WeeklyCooldown["shouldPrompt: false<br/>(reason: 'weekly_cooldown')<br/>Wait for 7-day cooldown"]
+    CheckWeek -- "Yes (>= 7 days)" --> ShowWeekly["shouldPrompt: true<br/>(reason: 'eligible_weekly_reprompt')<br/>Re-prompt user weekly"]
+    
+    ShowInitial --> UserAction{"User Action on Dialog"}
+    ShowWeekly --> UserAction
+    
+    UserAction -- "Submits Stars & Feedback" --> SubmitRoute["POST /api/v1/ratings<br/>{ rating: 1..5, feedbackText }"]
+    SubmitRoute --> SaveRating["1. Save Rating in Analytics DB<br/>2. Set RatingPromptState.hasSubmitted = true<br/>3. Never prompt user again!"]
+    
+    UserAction -- "Ignores / Dismisses ('Not Now')" --> DismissRoute["POST /api/v1/ratings/dismiss"]
+    DismissRoute --> SetCooldown["1. Record lastDismissedAt = now<br/>2. Increment dismissCount<br/>3. Set nextPromptEligibleAt = now + 7 days"]
+```
+
+---
+
+## 9. Ecosystem Version Handshake & Synchronization Flowchart
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as User App / Partner Portal / Sub-Backend
+    participant Middleware as Version Middleware (Main Backend)
+    participant Service as Version Service (v1.2.1)
+
+    Client->>Middleware: HTTP Request (Headers: x-app-version: 1.2.0, x-client-platform: user_app)
+    Middleware->>Service: checkCompatibility('user_app', '1.2.0')
+    Service-->>Middleware: { compatible: true, updateAvailable: true, forceUpdate: false, mainBackendVersion: '1.2.1' }
+    Middleware-->>Client: HTTP Response (Headers: x-backend-version: 1.2.1, x-app-update-available: true)
+    
+    Note over Client: App footer/settings displays:<br/>"Helping Services v1.2.1"
+    
+    alt Client queries explicit update check
+        Client->>Service: GET /api/v1/version/check?platform=user_app&version=1.2.0
+        Service-->>Client: 200 OK (Changelog, downloadUrl, updateAvailable: true)
+        Client->>Client: Display non-blocking update recommendation banner
+    else Client version below minSupportedVersion (e.g. 1.0.0)
+        Client->>Service: GET /api/v1/version/check?platform=user_app&version=1.0.0
+        Service-->>Client: 200 OK (forceUpdate: true, downloadUrl)
+        Client->>Client: Block UI & Display mandatory update modal
+    end
+```
+
+

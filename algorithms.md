@@ -253,3 +253,82 @@ Evaluates keystroke prefixes $\ge 1$ char:
 2. Trending searches aggregate normalized queries over a sliding 7-day window:
    $$\text{Trending} = \text{Top}_{N}\left(\sum_{\tau \ge \tau_{\text{now}} - 7d} \mathbb{I}(\text{normalizedQuery} = q)\right)$$
 3. Authenticated users can retrieve their deduplicated recent search history and selectively clear it.
+
+---
+
+## Algorithm 6: 2-Day Post-Registration Rating Prompt & Weekly Periodic Re-Prompt Engine
+
+### 6.1 Objective
+Optimize user engagement and app review quality by prompting users for star ratings (1 to 5 stars) and optional feedback only after they have experienced the platform for at least 2 days. Guarantee submission permanence (never prompt again once submitted) and respect user intent when dismissed by applying a strict 7-day weekly re-prompt cooldown.
+
+### 6.2 Mathematical Model & State Machine
+
+Let:
+- $\tau_{\text{now}}$: Current Unix epoch timestamp in milliseconds.
+- $\tau_{\text{reg}}$: User account creation timestamp (`User.createdAt` in Core DB).
+- $T \in \{\text{'app'}, \text{'partner'}\}$: Target entity evaluated for rating.
+- $\sigma(u, T)$: Rating prompt state tuple $(\text{hasSubmitted}, \tau_{\text{dismiss}}, k_{\text{dismiss}})$ in Analytics DB.
+
+#### 1. Registration Age & Cooldown
+$$\Delta \tau_{\text{reg}} = \tau_{\text{now}} - \tau_{\text{reg}}$$
+$$\mathcal{C}_{\text{reg}}(u) = \begin{cases}
+\text{TRUE} & \text{if } \Delta \tau_{\text{reg}} \ge 2 \times 24 \times 60 \times 60 \times 1000 \text{ ms} \quad (48\text{ hours}) \\
+\text{FALSE} & \text{otherwise}
+\end{cases}$$
+
+#### 2. Submission Permanence Guard
+If $\sigma(u, T).\text{hasSubmitted} = \text{TRUE}$:
+$$\mathcal{E}(u, T) = \text{FALSE} \quad \forall \; \tau \ge \tau_{\text{submit}} \quad (\text{Terminal State: Never Show Again})$$
+
+#### 3. Dismissal & Weekly Cooldown Loop
+When the user dismisses or ignores the prompt at timestamp $\tau_{\text{dismiss}}$:
+$$\tau_{\text{next\_eligible}} = \tau_{\text{dismiss}} + (7 \times 24 \times 60 \times 60 \times 1000) \text{ ms}$$
+$$\Delta \tau_{\text{dismiss}} = \tau_{\text{now}} - \tau_{\text{dismiss}}$$
+$$\mathcal{C}_{\text{weekly}}(u, T) = \begin{cases}
+\text{TRUE} & \text{if } \Delta \tau_{\text{dismiss}} \ge 7 \times 24 \times 60 \times 60 \times 1000 \text{ ms} \quad (1\text{ week}) \\
+\text{FALSE} & \text{otherwise}
+\end{cases}$$
+
+#### 4. Composite Decision Function
+$$\mathcal{E}(u, T) = \neg \sigma(u, T).\text{hasSubmitted} \;\land\; \mathcal{C}_{\text{reg}}(u) \;\land\; \left(k_{\text{dismiss}} = 0 \;\lor\; \mathcal{C}_{\text{weekly}}(u, T)\right)$$
+
+### 6.3 Algorithmic Pseudo-Code
+
+```python
+def check_rating_prompt_eligibility(user_id, target_type, partner_id=None):
+    user = CoreDB.User.findById(user_id)
+    if not user or not user.isVerified or user.isDeleted:
+        return {"shouldPrompt": False, "reason": "user_not_eligible"}
+
+    state = AnalyticsDB.RatingPromptState.findOne(userId=user_id, targetType=target_type, partnerId=partner_id)
+    
+    # Rule 1: Never show again if user already submitted
+    if state and state.hasSubmitted:
+        return {"shouldPrompt": False, "reason": "already_submitted", "hasSubmitted": True}
+
+    now = current_timestamp()
+    
+    # Rule 2: 2-Day registration delay
+    two_days_ms = 2 * 24 * 60 * 60 * 1000
+    if (now - user.createdAt) < two_days_ms:
+        hours_remaining = ceil((two_days_ms - (now - user.createdAt)) / (1000 * 60 * 60))
+        return {"shouldPrompt": False, "reason": "registration_cooldown", "hoursRemaining": hours_remaining}
+
+    # Rule 3: Weekly cooldown if previously dismissed
+    seven_days_ms = 7 * 24 * 60 * 60 * 1000
+    if state and state.lastDismissedAt:
+        if (now - state.lastDismissedAt) < seven_days_ms:
+            days_remaining = ceil((seven_days_ms - (now - state.lastDismissedAt)) / (1000 * 60 * 60 * 24))
+            return {"shouldPrompt": False, "reason": "weekly_cooldown", "daysRemaining": days_remaining}
+        
+        # 7 days elapsed since dismissal -> weekly re-prompt
+        return {"shouldPrompt": True, "reason": "eligible_weekly_reprompt", "dismissCount": state.dismissCount}
+
+    # Rule 4: Initial prompt (registered >= 2 days ago, never dismissed)
+    return {"shouldPrompt": True, "reason": "eligible_initial_prompt", "dismissCount": 0}
+```
+
+### 6.4 Complexity & Storage Analysis
+- **Evaluation Time**: $\mathcal{O}(1)$ via indexed compound lookups (`userId`, `targetType`, `partnerId`).
+- **Storage Footprint**: Minimal single document per user-target pair in Analytics DB, with zero polling write amplification.
+

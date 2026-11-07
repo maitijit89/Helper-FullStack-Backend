@@ -6,6 +6,8 @@ import adminProductRouter from './admin-product.route';
 import productRouter from './product.route';
 import cartRouter from './cart.route';
 import internalAnalysisRouter from './internal-analysis.route';
+import versionRouter from './version.route';
+import ratingRouter from './rating.route';
 import { reminderService } from '../services/reminder.service';
 
 const apiRouter = Router();
@@ -31,7 +33,13 @@ apiRouter.use('/cart', cartRouter);
 // 7. Sub-Backend User Analysis Engine Interface
 apiRouter.use('/internal/user-analysis', internalAnalysisRouter);
 
-// 8. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
+// 8. Version Synchronization & Ecosystem Handshake
+apiRouter.use('/version', versionRouter);
+
+// 9. App and Partner Rating & Prompt Scheduling Engine
+apiRouter.use('/ratings', ratingRouter);
+
+// 10. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
 apiRouter.post('/reminders/run', async (_req, res, next) => {
   try {
     const result = await reminderService.processPendingReminders();

@@ -60,6 +60,7 @@ Complete formal engineering documentation has been authored in the project root:
    - When user adds the Case to their purchase list $\rightarrow$ dynamically activates **Chained Accessory Expansion** to discover Screen Protectors, Lens Guards, MagSafe Wallets, and bundle discounts!
 4. **Algorithm 4 (3-Day Registration Abandonment Reminder Engine)**: Recovers dropped signups by detecting unverified applicants after 3 days and dropping a fresh OTP and activation reminder.
 5. **Algorithm 5 (Intelligent Multi-Field Product Search Engine)**: Multi-field weighted scoring (SKU, title, brand, category, tags), Damerau-Levenshtein typo tolerance (*"iphne"* $\rightarrow$ *"iphone"*, *"chagre"* $\rightarrow$ *"charger"*), academic & cart dwell boost synergy, dynamic facet extraction, autocomplete typeahead, and non-blocking search analytics.
+6. **Algorithm 6 (2-Day Post-Registration Rating & Weekly Re-Prompt Engine)**: Times app and partner rating requests with a strict 2-day delay after signup. Ensures submission permanence (never prompts again once submitted), and executes a 7-day cooldown loop when ignored or dismissed.
 
 ### 6. Sub-Backend Integration (User Analysis Engine)
 - Dedicated internal API (`/api/v1/internal/user-analysis/*`) protected by `x-engine-secret`.
@@ -135,6 +136,24 @@ All endpoints are mounted under `/api/v1`:
 | `POST` | `/api/v1/internal/user-analysis/sync` | Sync segment weights & feed instruction overrides | `x-engine-secret` |
 | `GET` | `/api/v1/internal/user-analysis/events` | Stream raw interaction events for ML training | `x-engine-secret` |
 
+### Version Synchronization & Ecosystem Handshake (`/api/v1/version`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/version` | Authoritative Main Backend version (1.2.1) & ecosystem sync matrix | No |
+| `GET` | `/api/v1/version/check` | Client app compatibility check (returns update requirements & backend version) | No |
+
+### App & Partner Rating Engine (`/api/v1/ratings`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/ratings/prompt-status` | Check prompt eligibility (2-day post-reg delay, 7-day weekly re-prompt) | Yes (`Bearer`) |
+| `POST` | `/api/v1/ratings` | Submit 1-5 star rating and optional text feedback (never prompts again) | Yes (`Bearer`) |
+| `POST` | `/api/v1/ratings/dismiss` | Dismiss/ignore prompt (sets 7-day weekly cooldown) | Yes (`Bearer`) |
+| `GET` | `/api/v1/ratings/summary` | Aggregated rating metrics (average stars, star distribution 1-5, reviews) | No |
+| `GET` | `/api/v1/ratings` | List all ratings with pagination and star filter | No |
+| `POST` | `/api/v1/ratings/reminders/run` | Scheduled worker scanning users due for rating requests | No |
+
 ---
 
 ## Quick Start
@@ -152,6 +171,6 @@ npm run dev
 # 4. Compile TypeScript
 npm run build
 
-# 5. Run test suites (47/47 passing across all 3 databases & algorithms)
+# 5. Run test suites (62/62 passing across all 3 databases & algorithms)
 npm test
 ```

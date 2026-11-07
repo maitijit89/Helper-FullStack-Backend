@@ -130,6 +130,8 @@ The system utilizes a single clustered connection pool with logical database seg
 |   - UserInterestProfile: Category affinities, tag weights, and sub-backend instruction overrides.  |
 |   - ProductEvent: Raw interaction telemetry (views, cart adds, accessory clicks, purchases).      |
 |   - SearchHistory: Search queries, timestamps, normalized tokens, and result counts for trending.  |
+|   - Rating: Star reviews (1-5) and optional text feedback for App and Partners.                    |
+|   - RatingPromptState: Prompt lifecycle state (2-day cooldown, submission flag, 7-day reprompt).   |
 +----------------------------------------------------------------------------------------------------+
 ```
 
@@ -184,3 +186,41 @@ The Main Backend is designed to act as the primary operational coordinator while
 3. **Non-Blocking Search Analytics**:
    - Search events are recorded asynchronously in `SearchHistory` without introducing latency to search API responses.
    - Indexed compound queries enable high-performance trending aggregations over 7-day windows.
+
+---
+
+## 6. Ecosystem Version Control & Cross-Client Handshake Topology
+
+```
++--------------------------------------------------------------------------------------------------+
+|                                    MAIN BACKEND (v1.2.1)                                         |
+|                          Source of Truth: package.json / env.VERSION                            |
++--------------------------------------------------------------------------------------------------+
+        |                                       |                                    |
+        | GET /api/v1/version                   | Handshake Headers                  | Compatibility Check
+        |                                       | (x-backend-version)                | GET /version/check
+        v                                       v                                    v
++-----------------------+           +-----------------------+           +--------------------------+
+|  User Mobile App      |           |  Partner Web Portal   |           |  Sub-Backends            |
+|  (Helping Services)   |           |  (Partner Portal)     |           |  - User Analysis Engine  |
+|  Target: v1.2.1       |           |  Target: v1.2.1       |           |  - Product Listing BFF   |
+|  Min: v1.2.0          |           |  Min: v1.2.0          |           |  Target: v1.2.1          |
++-----------------------+           +-----------------------+           +--------------------------+
+```
+
+1. **Global Interceptor**: Injects `x-backend-version: 1.2.1` into all HTTP responses so frontends can inspect and display backend version on the UI footer and settings screen.
+2. **Dynamic Semver Evaluation**: Checks `major.minor.patch` against platform-specific minimum supported and latest target versions, returning `forceUpdate` or `updateAvailable` states.
+
+---
+
+## 7. App & Partner Rating Subsystem Architecture
+
+1. **Dual Entity Domain**:
+   - Target `'app'`: Evaluates overall student satisfaction with the Helping Services platform.
+   - Target `'partner'`: Evaluates fulfillment reliability, food/stationery delivery speed, and partner conduct.
+2. **Prompt State Machine (Analytics DB)**:
+   - Stores `userId`, `targetType`, `partnerId`, `hasSubmitted`, `lastDismissedAt`, `dismissCount`, and `nextPromptEligibleAt`.
+   - Guaranteed idempotency via compound unique index: `{ userId: 1, targetType: 1, partnerId: 1 }`.
+3. **Decoupled Metric Aggregation**:
+   - Reviews and stars are computed using indexed MongoDB `$group` aggregation pipelines for instant average star calculations and distribution breakdowns (1 to 5 stars).
+

@@ -167,3 +167,54 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - Every search query is asynchronously dispatched to the **Analytics DB** (`SearchHistory` collection) without blocking the HTTP response.
 - `GET /api/v1/products/search/trending` computes top queries over the trailing 7 days using MongoDB aggregation.
 - Authenticated users can retrieve their deduplicated recent searches (`GET /api/v1/products/search/recent`) and permanently erase their search history (`DELETE /api/v1/products/search/recent`).
+
+---
+
+## 8. Ecosystem Version Control & Synchronization Rules
+
+### Rule 8.1: Single Authoritative Source of Truth
+- The Main Backend version (`1.2.1` in `package.json` / `env.VERSION`) is the single authoritative version for the entire ecosystem.
+- All three frontend platforms (*Helping Services User App*, *Helping Services Partner Portal*, *Admin Management Panel*) and all sub-backends (*User Analysis Engine*, *User App Product Listing BFF*) synchronize their target releases to match this version.
+
+### Rule 8.2: Version Handshake & Header Telemetry
+- All HTTP responses from the backend automatically inject the header:
+  `x-backend-version: 1.2.1`
+- When clients provide `x-app-version` and `x-client-platform` in request headers, the system computes compatibility and returns:
+  - `x-app-compatible: true | false`
+  - `x-app-update-available: true | false`
+  - `x-app-force-update: true | false`
+
+### Rule 8.3: Client Update Policy
+- `GET /api/v1/version/check` evaluates client semver:
+  1. **Up to Date** ($v_{\text{client}} = v_{\text{backend}}$): Client displays current version in app footer/settings; no prompts.
+  2. **Update Available** ($v_{\text{min}} \le v_{\text{client}} < v_{\text{backend}}$): Client remains functional; app surfaces non-blocking update recommendation banner.
+  3. **Force Update** ($v_{\text{client}} < v_{\text{min}}$): Client is blocked with mandatory update dialog directing user to download/app store URL.
+
+---
+
+## 9. App & Partner Rating System & Periodic Prompt Rules
+
+### Rule 9.1: Rating Scope & Star Mandatory Validation
+- Users can rate two distinct entities:
+  - `app`: The overall mobile/web application (*Helping Services*).
+  - `partner`: A specific verified service/delivery partner (`partnerId` required).
+- Star rating is mandatory and strictly validated as an integer between 1 and 5. Text feedback is optional ($\le 1000$ characters).
+
+### Rule 9.2: 2-Day Post-Registration Cooldown
+- Under no circumstances will a user be prompted to rate the app before **2 full days (48 hours)** have elapsed since their account registration (`user.createdAt`).
+- Requests to `GET /api/v1/ratings/prompt-status` prior to 48 hours return:
+  `shouldPrompt: false`, `reason: 'registration_cooldown'` with hours remaining.
+
+### Rule 9.3: One-Time Submission Permanence ("Never Show Again")
+- Once a user submits a rating for the app or a specific partner:
+  - The record is persisted in the **Analytics DB** (`Rating`).
+  - `RatingPromptState` records `hasSubmitted: true` and `submittedAt: now`.
+  - **The rating prompt dialog will NEVER be displayed again to that user for that target entity.**
+
+### Rule 9.4: Ignore/Dismissal 7-Day Weekly Loop
+- If the user ignores, dismisses, or clicks "Not Now / Remind Me Later":
+  - `POST /api/v1/ratings/dismiss` records `lastDismissedAt: now` and increments `dismissCount`.
+  - The system activates a **7-day cooldown window** ($\text{nextPromptEligibleAt} = \text{now} + 7\text{ days}$).
+  - For the next 7 days, prompt eligibility remains `shouldPrompt: false` (`reason: 'weekly_cooldown'`).
+  - Once 7 days elapse, the prompt automatically re-engages (`shouldPrompt: true`, `reason: 'eligible_weekly_reprompt'`).
+

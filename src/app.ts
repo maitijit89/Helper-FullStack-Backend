@@ -8,6 +8,7 @@ import { connectDB } from './config/database';
 import { logger } from './config/logger';
 import { errorHandler } from './middlewares/errorHandler';
 import { standardRateLimiter } from './middlewares/rateLimiter';
+import { versionMiddleware } from './middlewares/version.middleware';
 import apiRouter from './routes';
 
 export function createApp(): Express {
@@ -46,12 +47,29 @@ export function createApp(): Express {
       },
       credentials: true,
       methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+      allowedHeaders: [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'Accept',
+        'x-app-version',
+        'x-client-platform',
+        'x-engine-secret',
+      ],
+      exposedHeaders: [
+        'x-backend-version',
+        'x-app-compatible',
+        'x-app-update-available',
+        'x-app-force-update',
+      ],
     })
   );
 
   // Response Compression
   app.use(compression({ threshold: 1000 }));
+
+  // Version Header & Compatibility Interceptor Middleware
+  app.use(versionMiddleware);
 
   // Request Logging
   if (env.DEBUG) {
