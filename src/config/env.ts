@@ -46,8 +46,11 @@ export const env = {
   SMTP_FROM: process.env.SMTP_FROM || 'Helping Services <noreply@helpingservices.com>',
   SMTP_SECURE: process.env.SMTP_SECURE === 'true',
 
-  // Database (MongoDB) - 3 Interconnected Logical Databases
+  // Database (MongoDB) - 3 Interconnected Databases (Single or Multi-Cluster)
   MONGODB_URL: process.env.MONGODB_URL || 'mongodb://localhost:27017',
+  MONGODB_CORE_URL: process.env.MONGODB_CORE_URL || '',
+  MONGODB_CATALOG_URL: process.env.MONGODB_CATALOG_URL || '',
+  MONGODB_ANALYTICS_URL: process.env.MONGODB_ANALYTICS_URL || '',
   MONGODB_DB_NAME: process.env.MONGODB_DB_NAME || 'helping_services_db',
   MONGODB_CORE_DB_NAME: process.env.MONGODB_CORE_DB_NAME || 'helping_services_core',
   MONGODB_CATALOG_DB_NAME: process.env.MONGODB_CATALOG_DB_NAME || 'helping_services_catalog',

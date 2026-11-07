@@ -1,5 +1,5 @@
 import dns from 'dns';
-import mongoose, { Connection } from 'mongoose';
+import mongoose, { Connection, ConnectOptions } from 'mongoose';
 import { env } from './env';
 import { logger } from './logger';
 
@@ -12,9 +12,66 @@ if (process.platform === 'win32' && !process.env.VERCEL) {
   }
 }
 
+const isTestEnv = process.env.NODE_ENV === 'test';
+
+// Check if dedicated URLs are configured for each of the 3 databases
+export const isMultiCluster =
+  !isTestEnv &&
+  Boolean(env.MONGODB_CORE_URL && env.MONGODB_CATALOG_URL && env.MONGODB_ANALYTICS_URL);
+
+const commonConnectionOptions: ConnectOptions = {
+  autoIndex: true,
+  maxPoolSize: env.MONGODB_MAX_POOL_SIZE,
+  minPoolSize: env.MONGODB_MIN_POOL_SIZE,
+  maxIdleTimeMS: 30000,
+  serverSelectionTimeoutMS: 10000,
+  socketTimeoutMS: 45000,
+};
+
+let coreConnection: Connection | null = null;
+let catalogConnection: Connection | null = null;
+let analyticsConnection: Connection | null = null;
+
+if (isMultiCluster) {
+  coreConnection = mongoose.createConnection(env.MONGODB_CORE_URL, {
+    ...commonConnectionOptions,
+    dbName: env.MONGODB_CORE_DB_NAME,
+  });
+  catalogConnection = mongoose.createConnection(env.MONGODB_CATALOG_URL, {
+    ...commonConnectionOptions,
+    dbName: env.MONGODB_CATALOG_DB_NAME,
+  });
+  analyticsConnection = mongoose.createConnection(env.MONGODB_ANALYTICS_URL, {
+    ...commonConnectionOptions,
+    dbName: env.MONGODB_ANALYTICS_DB_NAME,
+  });
+}
+
 let cachedConnectionPromise: Promise<typeof mongoose> | null = null;
 
 export async function connectDB(): Promise<void> {
+  if (isMultiCluster && coreConnection && catalogConnection && analyticsConnection) {
+    logger.info('Connecting to 3 Dedicated MongoDB Atlas Clusters...');
+    try {
+      await Promise.all([
+        coreConnection.asPromise(),
+        catalogConnection.asPromise(),
+        analyticsConnection.asPromise(),
+      ]);
+      logger.info(
+        `All 3 dedicated MongoDB Atlas clusters connected successfully:
+  - Core DB: [${coreConnection.host || 'Atlas'}] -> ${env.MONGODB_CORE_DB_NAME}
+  - Catalog DB: [${catalogConnection.host || 'Atlas'}] -> ${env.MONGODB_CATALOG_DB_NAME}
+  - Analytics DB: [${analyticsConnection.host || 'Atlas'}] -> ${env.MONGODB_ANALYTICS_DB_NAME}`
+      );
+      return;
+    } catch (err: any) {
+      logger.error(`Error connecting to multi-cluster MongoDB: ${err.message}`);
+      throw err;
+    }
+  }
+
+  // Single-cluster or In-Memory test fallback
   if (mongoose.connection.readyState === 1) {
     return;
   }
@@ -24,28 +81,24 @@ export async function connectDB(): Promise<void> {
     return;
   }
 
-  const isSrv = env.MONGODB_URL.startsWith('mongodb+srv://');
-  let mongoUri = env.MONGODB_URL;
+  const defaultUrl = env.MONGODB_CORE_URL || env.MONGODB_URL;
+  const isSrv = defaultUrl.startsWith('mongodb+srv://');
+  let mongoUri = defaultUrl;
 
   if (!isSrv) {
-    mongoUri = env.MONGODB_URL.endsWith('/')
-      ? `${env.MONGODB_URL}${env.MONGODB_DB_NAME}`
-      : env.MONGODB_URL.includes('?') || env.MONGODB_URL.split('/').length > 3
-      ? env.MONGODB_URL
-      : `${env.MONGODB_URL}/${env.MONGODB_DB_NAME}`;
+    mongoUri = defaultUrl.endsWith('/')
+      ? `${defaultUrl}${env.MONGODB_DB_NAME}`
+      : defaultUrl.includes('?') || defaultUrl.split('/').length > 3
+      ? defaultUrl
+      : `${defaultUrl}/${env.MONGODB_DB_NAME}`;
   }
 
   logger.info(`Connecting to MongoDB Cluster (${isSrv ? 'Atlas SRV' : 'Direct'})...`);
 
   try {
     cachedConnectionPromise = mongoose.connect(mongoUri, {
+      ...commonConnectionOptions,
       dbName: env.MONGODB_CORE_DB_NAME,
-      autoIndex: true,
-      maxPoolSize: env.MONGODB_MAX_POOL_SIZE,
-      minPoolSize: env.MONGODB_MIN_POOL_SIZE,
-      maxIdleTimeMS: 30000,
-      serverSelectionTimeoutMS: 10000,
-      socketTimeoutMS: 45000,
     });
     await cachedConnectionPromise;
     logger.info(
@@ -63,8 +116,8 @@ export async function connectDB(): Promise<void> {
  * Manages Users, Roles, Auth, Sessions, Registrations
  */
 export function getCoreDb(): Connection {
-  if (mongoose.connection.readyState === 0) {
-    return mongoose.connection.useDb(env.MONGODB_CORE_DB_NAME, { useCache: true });
+  if (coreConnection) {
+    return coreConnection;
   }
   return mongoose.connection.useDb(env.MONGODB_CORE_DB_NAME, { useCache: true });
 }
@@ -74,8 +127,8 @@ export function getCoreDb(): Connection {
  * Manages Admin Uploads, Products, Categories, Accessories
  */
 export function getCatalogDb(): Connection {
-  if (mongoose.connection.readyState === 0) {
-    return mongoose.connection.useDb(env.MONGODB_CATALOG_DB_NAME, { useCache: true });
+  if (catalogConnection) {
+    return catalogConnection;
   }
   return mongoose.connection.useDb(env.MONGODB_CATALOG_DB_NAME, { useCache: true });
 }
@@ -85,24 +138,24 @@ export function getCatalogDb(): Connection {
  * Manages Cart Sessions, Dwell Times, Interest Profiles, Interaction Events
  */
 export function getAnalyticsDb(): Connection {
-  if (mongoose.connection.readyState === 0) {
-    return mongoose.connection.useDb(env.MONGODB_ANALYTICS_DB_NAME, { useCache: true });
+  if (analyticsConnection) {
+    return analyticsConnection;
   }
   return mongoose.connection.useDb(env.MONGODB_ANALYTICS_DB_NAME, { useCache: true });
 }
 
 export async function ensureIndexes(): Promise<void> {
   try {
-    if (mongoose.connection.readyState === 1) {
-      const dbs = [getCoreDb(), getCatalogDb(), getAnalyticsDb()];
-      for (const db of dbs) {
+    const dbs = [getCoreDb(), getCatalogDb(), getAnalyticsDb()];
+    for (const db of dbs) {
+      if (db.readyState === 1) {
         const modelNames = db.modelNames();
         for (const name of modelNames) {
           await db.model(name).syncIndexes();
         }
       }
-      logger.info('MongoDB indexes synchronized across all 3 databases successfully.');
     }
+    logger.info('MongoDB indexes synchronized across all 3 databases successfully.');
   } catch (err: any) {
     logger.warn(`Background index synchronization warning: ${err.message}`);
   }
@@ -110,7 +163,12 @@ export async function ensureIndexes(): Promise<void> {
 
 export async function closeDB(): Promise<void> {
   try {
-    await mongoose.connection.close();
+    if (coreConnection) await coreConnection.close();
+    if (catalogConnection) await catalogConnection.close();
+    if (analyticsConnection) await analyticsConnection.close();
+    if (mongoose.connection.readyState !== 0) {
+      await mongoose.connection.close();
+    }
     logger.info('MongoDB connections closed.');
   } catch (error) {
     logger.error(`Error closing MongoDB connection: ${error}`);

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import mongoose from 'mongoose';
+import { getCoreDb } from '../config/database';
 import { redisService } from '../services/redis.service';
 import { r2Service } from '../services/r2.service';
 import { env } from '../config/env';
@@ -7,7 +7,7 @@ import { env } from '../config/env';
 const router = Router();
 
 router.get('/health', async (req: Request, res: Response) => {
-  const dbState = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  const dbState = getCoreDb().readyState === 1 ? 'connected' : 'disconnected';
   const redisState = redisService.getStatus();
   const storageState = r2Service.provider;
 
