@@ -177,6 +177,7 @@ All endpoints are mounted under `/api/v1`:
 
 ## Quick Start
 
+### 1. Local Development
 ```bash
 # 1. Install dependencies
 npm install
@@ -193,3 +194,31 @@ npm run build
 # 5. Run test suites (72/72 passing across all 3 databases & algorithms)
 npm test
 ```
+
+### 2. Docker Containerization
+```bash
+# 1. Build optimized multi-stage production Docker image
+docker build -t helping-services-backend:1.2.1 .
+
+# 2. Run standalone container
+docker run -d --name helping_backend -p 8000:8000 --env-file .env helping-services-backend:1.2.1
+
+# 3. Or launch complete local stack with MongoDB & Redis via Docker Compose
+docker-compose up -d --build
+```
+
+### 3. Kubernetes Deployment (`k8s/`)
+```bash
+# 1. Inspect manifests in k8s/ directory
+ls k8s/
+
+# 2. Deploy entire production stack with single Kustomize command
+kubectl apply -k k8s/
+
+# 3. Verify pod status across cluster nodes
+kubectl get pods -n helping-services -o wide
+
+# 4. Check HorizontalPodAutoscaler (HPA) metrics
+kubectl get hpa -n helping-services
+```
+

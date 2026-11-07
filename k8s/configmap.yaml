@@ -1,0 +1,30 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: helping-services-config
+  namespace: helping-services
+  labels:
+    app.kubernetes.io/name: main-backend
+    app.kubernetes.io/part-of: helping-services
+data:
+  NODE_ENV: "production"
+  ENVIRONMENT: "production"
+  DEBUG: "false"
+  PORT: "8000"
+  HOST: "0.0.0.0"
+  PROJECT_NAME: "Helping Services"
+  VERSION: "1.2.1"
+  API_V1_STR: "/api/v1"
+  MONGODB_DB_NAME: "helping_services_db"
+  MONGODB_CORE_DB_NAME: "helping_services_core"
+  MONGODB_CATALOG_DB_NAME: "helping_services_catalog"
+  MONGODB_ANALYTICS_DB_NAME: "helping_services_analytics"
+  MONGODB_MAX_POOL_SIZE: "50"
+  MONGODB_MIN_POOL_SIZE: "10"
+  OTP_EXPIRES_IN_MINUTES: "10"
+  REGISTRATION_REMINDER_DAYS: "3"
+  CART_DWELL_BOOST_MINUTES: "15"
+  RATE_LIMIT_PER_MINUTE: "300"
+  ADMIN_SUB_BACKEND_URL: "http://admin-sub-backend-svc.helping-services.svc.cluster.local:8001"
+  BACKEND_CORS_ORIGINS: '["https://app.helpingservices.com","https://partner.helpingservices.com","https://admin.helpingservices.com"]'
+

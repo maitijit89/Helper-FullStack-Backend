@@ -1,30 +1,56 @@
 version: '3.8'
 
 services:
-  web:
+  main-backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: helper_backend_app
+    container_name: helping_services_backend
+    restart: always
     ports:
       - "8000:8000"
     environment:
-      - ENVIRONMENT=production
-      - DEBUG=false
-      - MONGODB_URL=mongodb://db:27017
-      - MONGODB_DB_NAME=helper_production
-      - SECRET_KEY=supersecretkey-change-this-in-production-use-openssl-rand-hex-32
-      - REDIS_URL=redis://redis:6379/0
+      - NODE_ENV=production
+      - PORT=8000
+      - HOST=0.0.0.0
+      - ENVIRONMENT=development
+      - DEBUG=true
+      - PROJECT_NAME=Helping Services
+      - VERSION=1.2.1
+      - API_V1_STR=/api/v1
+      - JWT_SECRET=helping-services-jwt-super-secret-key-2026
+      - JWT_EXPIRES_IN=7d
+      - OTP_EXPIRES_IN_MINUTES=10
+      - REGISTRATION_REMINDER_DAYS=3
+      - MONGODB_URL=mongodb://mongodb:27017
+      - MONGODB_DB_NAME=helping_services_db
+      - MONGODB_CORE_DB_NAME=helping_services_core
+      - MONGODB_CATALOG_DB_NAME=helping_services_catalog
+      - MONGODB_ANALYTICS_DB_NAME=helping_services_analytics
+      - REDIS_URL=redis://redis:6379
+      - ANALYSIS_ENGINE_SECRET=helping-services-analysis-engine-secret-2026
+      - ADMIN_SUB_BACKEND_SECRET=helping-services-admin-sub-backend-secret-2026
+      - ADMIN_SUB_BACKEND_URL=http://admin-sub-backend:8001
+      - CART_DWELL_BOOST_MINUTES=15
+      - RATE_LIMIT_PER_MINUTE=300
     depends_on:
-      db:
+      mongodb:
         condition: service_healthy
       redis:
         condition: service_healthy
-    restart: always
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - helping_services_net
 
-  db:
+  mongodb:
     image: mongo:7.0
-    container_name: mongodb_db
+    container_name: helping_services_mongodb
+    restart: always
     ports:
       - "27017:27017"
     volumes:
@@ -34,11 +60,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: always
+    networks:
+      - helping_services_net
 
   redis:
-    image: redis:7.0-alpine
-    container_name: redis_cache
+    image: redis:7.2-alpine
+    container_name: helping_services_redis
+    restart: always
     ports:
       - "6379:6379"
     volumes:
@@ -48,8 +76,15 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
-    restart: always
+    networks:
+      - helping_services_net
 
 volumes:
   mongo_data:
+    driver: local
   redis_data:
+    driver: local
+
+networks:
+  helping_services_net:
+    driver: bridge

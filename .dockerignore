@@ -1,0 +1,47 @@
+# Dependency directories
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# Git & Repository metadata
+.git/
+.gitignore
+.gitattributes
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Test files and mocks
+tests/
+__tests__/
+*.test.ts
+*.spec.ts
+jest.config.js
+
+# Antigravity Brain & logs
+.system_generated/
+*.log
+
+# Temporary scratch files
+scratch/
+tmp/
+

@@ -273,4 +273,71 @@ The Main Backend is designed to act as the primary operational coordinator while
    - The in-memory sliding buffer decouples mobile submission latency from sub-backend network variability.
    - Pushes telemetry events via HTTP POST to the Admin Sub-Backend and exposes high-speed polling endpoints (`/api/v1/internal/admin/locations/*`).
 
+---
+
+## 9. Docker Containerization & Kubernetes Cluster Topology
+
+### Container Architecture (Dockerfile)
+```
++--------------------------------------------------------------------------------------------------+
+| BUILD STAGE (node:22-alpine)                                                                     |
+| - npm ci (full devDependencies + TypeScript compiler)                                             |
+| - npm run build (outputs clean ES/CJS bundle into /dist)                                         |
++--------------------------------------------------------------------------------------------------+
+                                                |
+                                                v (Copies /dist artifacts only)
++--------------------------------------------------------------------------------------------------+
+| PRODUCTION RUNNER (node:22-alpine)                                                               |
+| - dumb-init (PID 1 kernel signal & zombie reaper)                                                |
+| - npm ci --omit=dev --ignore-scripts (lean production node_modules)                              |
+| - USER node (non-root unprivileged security execution)                                            |
+| - HEALTHCHECK: wget http://127.0.0.1:8000/api/v1/health                                           |
++--------------------------------------------------------------------------------------------------+
+```
+
+### Kubernetes Cluster Orchestration (`k8s/`)
+
+```
+                                  [ Internet Traffic ]
+                                           |
+                                           v
+                             +---------------------------+
+                             |  NGINX Ingress Controller | (TLS via cert-manager)
+                             +---------------------------+
+                                           |
+                                           v
+                             +---------------------------+
+                             |  ClusterIP Service (:8000)|
+                             +---------------------------+
+                                           |
+               +---------------------------+---------------------------+
+               |                           |                           |
+               v                           v                           v
+     +-------------------+       +-------------------+       +-------------------+
+     | Pod 1 (Node A)    |       | Pod 2 (Node B)    |       | Pod 3 (Node C)    |
+     | - Liveness Probe  |       | - Liveness Probe  |       | - Liveness Probe  |
+     | - Readiness Probe |       | - Readiness Probe |       | - Readiness Probe |
+     | - Startup Probe   |       | - Startup Probe   |       | - Startup Probe   |
+     +-------------------+       +-------------------+       +-------------------+
+               ^                           ^                           ^
+               |                           |                           |
+               +---------------------------+---------------------------+
+                                           |
+                           +-------------------------------+
+                           | HorizontalPodAutoscaler (HPA) | (Autoscales 3 -> 10 Pods)
+                           | Target: 75% CPU / 80% Memory  |
+                           +-------------------------------+
+```
+
+1. **High Availability & Fault Tolerance**:
+   - **Replicas**: 3 active replicas by default.
+   - **Pod Anti-Affinity**: Spreads pods across separate physical/virtual cluster nodes (`topologyKey: "kubernetes.io/hostname"`).
+   - **Zero-Downtime Rolling Updates**: `maxSurge: 1`, `maxUnavailable: 0` ensures new pods pass readiness checks before old pods terminate.
+2. **Cluster Security & Hardening**:
+   - `runAsNonRoot: true`, `runAsUser: 1000`, `allowPrivilegeEscalation: false`.
+   - `network-policy.yaml`: Restricts cluster network perimeter to permitted DNS, MongoDB, Redis, and SMTP egress.
+3. **Kustomize Automation**:
+   - Single-command cluster deployment via `kubectl apply -k k8s/`.
+
+
 

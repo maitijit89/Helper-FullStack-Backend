@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: helping-services
+  labels:
+    app.kubernetes.io/name: helping-services
+    app.kubernetes.io/part-of: helping-services-platform
+

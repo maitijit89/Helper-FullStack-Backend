@@ -250,4 +250,33 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - Operator dashboard routes under `/api/v1/admin/locations/*` require active admin credentials (`authenticate` + `authorizeRole('admin')`).
 - Unauthorized regular users receive `403 Forbidden`.
 
+---
+
+## 11. Containerization & Kubernetes Orchestration Rules
+
+### Rule 11.1: Non-Root Execution Enforcement
+- Production Docker containers **MUST NEVER** run as `root` (UID 0).
+- The Dockerfile must explicitly switch to `USER node` (UID 1000) prior to runtime execution.
+- Kubernetes deployment manifests enforce `runAsNonRoot: true`, `allowPrivilegeEscalation: false`, and drop all Linux capabilities (`capabilities: { drop: ["ALL"] }`).
+
+### Rule 11.2: Multi-Stage Build & Artifact Hygiene
+- Development dependencies (TypeScript compiler, `@types/*`, Jest test harnesses) must be purged from the production image.
+- Only compiled `/dist` files and production dependencies installed via `npm ci --omit=dev --ignore-scripts` are packaged in the final runner stage.
+
+### Rule 11.3: Three-Tier Health Probe Contract
+- Kubernetes pods must configure three independent probes targeting `/api/v1/health`:
+  1. **Startup Probe**: Tolerates up to 60 seconds of initial database connection pool creation without early container restarts.
+  2. **Readiness Probe**: Queries `/api/v1/health` every 5 seconds. Pods failing readiness are immediately pulled from the Service endpoint rotation.
+  3. **Liveness Probe**: Queries `/api/v1/health` every 15 seconds to detect unrecoverable event-loop deadlocks.
+
+### Rule 11.4: Zero-Downtime RollingUpdate Invariant
+- Production deployments must declare:
+  `strategy: { type: RollingUpdate, rollingUpdate: { maxSurge: 1, maxUnavailable: 0 } }`
+- At no point during cluster deployments may the active serving pod capacity drop below the target replica count (minimum 3).
+
+### Rule 11.5: Strict Secret & Configuration Decoupling
+- No environment passwords, database URIs, or tokens may be hardcoded into container images or Git-tracked manifests.
+- Sensitive credentials must be injected at runtime via Kubernetes `Secret` resources (`envFrom: secretRef`), while operational flags are sourced from `ConfigMap`.
+
+
 

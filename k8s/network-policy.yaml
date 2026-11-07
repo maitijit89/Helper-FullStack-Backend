@@ -1,0 +1,55 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: helping-services-network-policy
+  namespace: helping-services
+  labels:
+    app.kubernetes.io/name: main-backend
+    app.kubernetes.io/part-of: helping-services
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: main-backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from Ingress Controller and intra-namespace sub-backends
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow outbound connections to external MongoDB, Upstash Redis, Cloudflare R2, and SMTP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 192.168.0.0/16
+              - 172.16.0.0/12
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 27017
+        - protocol: TCP
+          port: 6379
+        - protocol: TCP
+          port: 587
+    # Allow internal communication with Sub-Backends inside the cluster
+    - to:
+        - podSelector: {}
+
