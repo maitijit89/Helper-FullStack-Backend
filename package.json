@@ -10,6 +10,7 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
+    "verify:db": "ts-node scripts/verify_atlas_clusters.ts",
     "test": "jest --runInBand --detectOpenHandles",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"
