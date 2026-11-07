@@ -278,5 +278,47 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - No environment passwords, database URIs, or tokens may be hardcoded into container images or Git-tracked manifests.
 - Sensitive credentials must be injected at runtime via Kubernetes `Secret` resources (`envFrom: secretRef`), while operational flags are sourced from `ConfigMap`.
 
+---
+
+## 12. Real-Time User OS & Device Telemetry Grabbing Rules
+
+### Rule 12.1: Supported OS Classification & Normalized Payload
+- Mobile client applications (iOS and Android), partner portals, and web clients must submit real-time OS and device telemetry via `POST /api/v1/users/device-telemetry`.
+- Permitted OS identifiers (`osName`):
+  `['ios', 'android', 'web', 'windows', 'macos', 'linux', 'other']`.
+- If client payload omits `osName` or device fields, the system fallback parser extracts them automatically from the standard `User-Agent` and custom HTTP headers (`x-device-brand`, `x-device-model`, `x-os-version`, `x-device-type`, `x-network-type`).
+
+### Rule 12.2: Dual-Database Persistence & Snapshot Isolation
+- **Analytics DB (`UserDevice` collection)**:
+  - Stores complete, immutable time-series telemetry records for auditing, fleet tracking, and ecosystem analytics.
+  - Indexed by `{ userId: 1, timestamp: -1 }`, `{ osName: 1, timestamp: -1 }`, and `{ timestamp: -1 }`.
+- **Core DB (`User.lastDevice` snapshot)**:
+  - Maintains the latest known operating system and hardware state for instant profile lookup, security checks, and push notification targeting.
+  - Snapshot updates occur atomically alongside telemetry ingestion.
+
+### Rule 12.3: Non-Blocking Real-Time Streaming & Buffer Decoupling
+- Telemetry ingestion must never block mobile client responsiveness:
+  1. Persists telemetry in Analytics DB and updates Core DB snapshot asynchronously.
+  2. Pushes the telemetry event into an in-memory sliding buffer queue (`recentEvents`, max 1000 items).
+  3. Dispatches an asynchronous HTTP webhook to `${env.ADMIN_SUB_BACKEND_URL}/api/v1/internal/devices/stream`.
+  4. Returns HTTP 200 to the client immediately ($< 15$ ms response time).
+
+### Rule 12.4: Admin Sub-Backend Security & Secret Handshake
+- Internal endpoints under `/api/v1/internal/admin/devices/*` (`/stream`, `/analytics`, `/users/:userId/history`) are strictly guarded.
+- Incoming calls from the Admin Sub-Backend must furnish a valid `x-engine-secret` or `x-admin-sub-backend-secret` matching `env.ADMIN_SUB_BACKEND_SECRET`.
+- Calls with missing or invalid credentials receive `401 Unauthorized`.
+
+### Rule 12.5: Admin Panel RBAC Authorization
+- Operator dashboard routes under `/api/v1/admin/devices/*` require active admin credentials (`authenticate` + `authorizeRole('admin')`).
+- Regular user tokens receive `403 Forbidden`.
+
+### Rule 12.6: Security Anomaly & Integrity Indicators
+- Telemetry captures critical client integrity flags:
+  - `isEmulator`: Detects virtualized execution environments (e.g., Android emulator, Xcode simulator).
+  - `isRootedOrJailbroken`: Detects compromised devices running with escalated privileges.
+  - `batteryLevel` & `networkType`: Identifies device constraints for adaptive polling and streaming rates.
+- Telemetry records flagging jailbroken or rooted hardware are surfaced as security alerts in the Admin Sub-Backend analytics dashboard.
+
+
 
 

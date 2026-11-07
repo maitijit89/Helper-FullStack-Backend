@@ -10,6 +10,8 @@ import {
 } from '../schemas/user.schema';
 import { updateLocationSchema } from '../schemas/location.schema';
 import { locationService } from '../services/location.service';
+import { recordDeviceSchema } from '../schemas/device.schema';
+import { deviceService } from '../services/device.service';
 
 const router = Router();
 
@@ -91,6 +93,37 @@ router.post(
         success: true,
         message: 'Real-time location updated and streamed to Admin Sub-Backend.',
         data: result.location,
+        forwardedToAdminSubBackend: result.forwardedToAdminSubBackend,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   POST /api/v1/users/device-telemetry
+ * @desc    Submit user real-time OS (iOS, Android, Web) and hardware device details.
+ *          Persists telemetry in Analytics DB, updates user.lastDevice in Core DB,
+ *          and streams telemetry to Admin Sub-Backend.
+ */
+router.post(
+  '/device-telemetry',
+  validateBody(recordDeviceSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      const result = await deviceService.recordUserDevice(req.user!.id, req.body, {
+        ipAddress,
+        userAgent,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: 'Real-time device and OS details updated and streamed to Admin Sub-Backend.',
+        data: result.device,
         forwardedToAdminSubBackend: result.forwardedToAdminSubBackend,
       });
     } catch (error) {

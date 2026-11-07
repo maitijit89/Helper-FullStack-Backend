@@ -29,6 +29,16 @@ export interface IUser extends Document {
     accuracy?: number;
     updatedAt: Date;
   };
+  lastDevice?: {
+    osName: string;
+    osVersion?: string;
+    deviceBrand?: string;
+    deviceModel?: string;
+    deviceType?: string;
+    appVersion?: string;
+    ipAddress?: string;
+    updatedAt: Date;
+  };
   isDeleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -133,6 +143,19 @@ export const UserSchema = new Schema<IUser>(
       latitude: Number,
       longitude: Number,
       accuracy: Number,
+      updatedAt: Date,
+    },
+    lastDevice: {
+      osName: {
+        type: String,
+        enum: ['ios', 'android', 'web', 'windows', 'macos', 'linux', 'other'],
+      },
+      osVersion: String,
+      deviceBrand: String,
+      deviceModel: String,
+      deviceType: String,
+      appVersion: String,
+      ipAddress: String,
       updatedAt: Date,
     },
     isDeleted: {

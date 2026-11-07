@@ -318,5 +318,48 @@ sequenceDiagram
     end
 ```
 
+---
+
+## 11. Real-Time OS & Device Telemetry Grabbing & Admin Sub-Backend Streaming Flowchart
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as User Mobile App (Helping Services)
+    participant Main as Main Backend (/api/v1/users/device-telemetry)
+    participant CoreDB as Core DB (User.lastDevice)
+    participant AnalyticsDB as Analytics DB (UserDevice)
+    participant Buffer as In-Memory Event Queue
+    participant AdminSub as Admin Sub-Backend (Operations Engine)
+
+    App->>Main: POST /api/v1/users/device-telemetry (Bearer JWT)<br/>{ osName: "ios", osVersion: "18.2", deviceBrand: "Apple", deviceModel: "iPhone 16 Pro", batteryLevel: 88, isEmulator: false }
+    
+    par Dual Database Persistence
+        Main->>AnalyticsDB: Insert UserDevice (Historical Telemetry Log)
+        AnalyticsDB-->>Main: Telemetry Logged
+    and
+        Main->>CoreDB: Update User.lastDevice (Latest Hardware Snapshot)
+        CoreDB-->>Main: User Snapshot Updated
+    and
+        Main->>Buffer: Push streamEvent to sliding window queue (Max 1000)
+    end
+
+    Main-->>App: 200 OK (Device Telemetry Recorded & Streamed)
+
+    par Admin Sub-Backend Real-Time Delivery
+        opt When ADMIN_SUB_BACKEND_URL is configured
+            Main->>AdminSub: POST /api/v1/internal/devices/stream (x-engine-secret)<br/>{ userId, userName, role, osName, osVersion, deviceBrand, deviceModel, batteryLevel, isEmulator, isRootedOrJailbroken, timestamp }
+            AdminSub-->>Main: 200 OK (Acknowledged)
+        end
+    and Polling / Live Query Surface
+        AdminSub->>Main: GET /api/v1/internal/admin/devices/stream (x-engine-secret)
+        Main-->>AdminSub: 200 OK (Buffered device events)
+    and Fleet OS & Device Analytics
+        AdminSub->>Main: GET /api/v1/internal/admin/devices/analytics (x-engine-secret)
+        Main-->>AdminSub: 200 OK ({ osBreakdown: { ios, android }, topBrands, topModels, securityAlerts })
+    end
+```
+
+
 
 

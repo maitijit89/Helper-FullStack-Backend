@@ -339,5 +339,49 @@ The Main Backend is designed to act as the primary operational coordinator while
 3. **Kustomize Automation**:
    - Single-command cluster deployment via `kubectl apply -k k8s/`.
 
+---
+
+## 10. Real-Time OS & Device Telemetry Streaming Architecture
+
+```
++--------------------------------------------------------------------------------------------------+
+|                                    USER APP MOBILE CLIENT                                        |
+|                     (OS: iOS / Android, Brand: Apple / Samsung, Model, Battery, Net)             |
++--------------------------------------------------------------------------------------------------+
+                                                |
+                                                | POST /api/v1/users/device-telemetry (Bearer JWT)
+                                                v
++--------------------------------------------------------------------------------------------------+
+|                                      MAIN BACKEND (v1.2.1)                                       |
++--------------------------------------------------------------------------------------------------+
+          |                                     |                                    |
+          v                                     v                                    v
++--------------------+               +--------------------+              +-------------------------+
+| 1. Core DB         |               | 2. Analytics DB    |              | 3. In-Memory Event      |
+| Update             |               | Create UserDevice  |              | Buffer (Max 1000 items) |
+| User.lastDevice    |               | (Time-Series Log)  |              +-------------------------+
++--------------------+               +--------------------+                          |
+                                                                                     | Async Push Webhook /
+                                                                                     | GET /stream Polling
+                                                                                     v
+                                                                 +---------------------------------+
+                                                                 | ADMIN SUB-BACKEND               |
+                                                                 | - Real-Time Device Telemetry    |
+                                                                 | - iOS vs Android Fleet Share    |
+                                                                 | - OS Version Adoption Tracking  |
+                                                                 | - Root/Jailbreak Security Alert |
+                                                                 +---------------------------------+
+```
+
+### Telemetry Pipeline Mechanics
+1. **Dual DB Ingestion**:
+   - **Core DB**: Updates `User.lastDevice` snapshot (`osName`, `osVersion`, `deviceBrand`, `deviceModel`, `batteryLevel`, `isEmulator`, `isRootedOrJailbroken`, `updatedAt`) for real-time user session insight.
+   - **Analytics DB**: Appends a new time-series document in `UserDevice` collection for immutable historical auditing, hardware tracking, and ecosystem analytics.
+2. **Sub-Backend Streaming Pipeline**:
+   - Telemetry is buffered in an in-memory FIFO queue (`recentEvents`, max 1000 items) to guarantee sub-15ms response times.
+   - Pushes telemetry events via HTTP POST to the Admin Sub-Backend (`${ADMIN_SUB_BACKEND_URL}/api/v1/internal/devices/stream`).
+   - Exposes authenticated high-throughput polling and analytical endpoints (`/api/v1/internal/admin/devices/*`) protected by `x-engine-secret`.
+
+
 
 

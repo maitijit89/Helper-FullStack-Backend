@@ -417,4 +417,111 @@ def process_realtime_location(user_id, lat, lng, accuracy, speed, heading):
     return location_doc
 ```
 
+---
+
+## Algorithm 8: Real-Time OS/Device Telemetry Aggregation & Security Anomaly Pipeline
+
+### 8.1 Objective
+Capture real-time device and operating system characteristics (iOS, Android, Web, hardware brands, models, battery levels, emulator indicators, rooted/jailbroken state) from active mobile and web users. Simultaneously ingest telemetry into Analytics DB, update the Core DB user hardware snapshot, stream to the Admin Sub-Backend with minimal latency, and compute aggregated fleet metrics.
+
+### 8.2 Mathematical Model & Aggregation Formulations
+
+Let:
+- $\mathcal{D} = \{d_1, d_2, \dots, d_N\}$: Set of device telemetry events recorded in Analytics DB.
+- $\mathcal{U}$: Unique set of user IDs active in telemetry records, $\mathcal{U} = \{u \mid \exists d \in \mathcal{D}, d.\text{userId} = u\}$.
+- $\text{OS} \in \{\text{ios}, \text{android}, \text{web}, \text{windows}, \text{macos}, \text{linux}, \text{other}\}$: Classified operating system platform.
+
+#### 1. OS Market Share Formulation
+For any operating system $\text{OS}_k$:
+$$N(\text{OS}_k) = \sum_{d \in \mathcal{D}} \mathbb{I}(d.\text{osName} = \text{OS}_k)$$
+
+$$P(\text{OS}_k) = \begin{cases}
+\left(\frac{N(\text{OS}_k)}{N}\right) \times 100\% & \text{if } N > 0 \\
+0 & \text{otherwise}
+\end{cases}$$
+
+Specifically for mobile ecosystem distribution (iOS vs. Android):
+$$P(\text{iOS}) = \frac{N(\text{ios})}{N} \times 100\%, \quad P(\text{Android}) = \frac{N(\text{android})}{N} \times 100\%$$
+
+#### 2. Top Brands, Models & OS Version Distributions
+Ranked frequency aggregations:
+$$\text{TopBrands}_k = \operatorname{argTop}_k \left( \sum_{d \in \mathcal{D}} \mathbb{I}(d.\text{deviceBrand} = B) \right)$$
+$$\text{TopModels}_k = \operatorname{argTop}_k \left( \sum_{d \in \mathcal{D}} \mathbb{I}(d.\text{deviceModel} = M) \right)$$
+$$\text{TopOSVersions}_k = \operatorname{argTop}_k \left( \sum_{d \in \mathcal{D}} \mathbb{I}(d.\text{osVersion} = V \land d.\text{osName} = \text{OS}) \right)$$
+
+#### 3. Security Risk & Integrity Scoring
+Each device telemetry event evaluates client security anomalies:
+$$S_{\text{risk}}(d) = w_{\text{root}} \cdot \mathbb{I}(d.\text{isRootedOrJailbroken}) + w_{\text{emu}} \cdot \mathbb{I}(d.\text{isEmulator}) + w_{\text{bat}} \cdot \mathbb{I}(d.\text{batteryLevel} \le 10\%)$$
+where default risk weights are calibrated to $w_{\text{root}} = 0.6$, $w_{\text{emu}} = 0.3$, $w_{\text{bat}} = 0.1$.
+Events with $S_{\text{risk}}(d) \ge 0.5$ automatically trigger security alerts in the Admin Sub-Backend stream.
+
+### 8.3 Algorithmic Pseudo-Code
+
+```python
+def record_device_telemetry(user_id, telemetry_data, headers):
+    now = current_timestamp()
+    user = CoreDB.User.findById(user_id)
+    
+    # 1. Fallback extraction from headers if payload fields are omitted
+    os_name = telemetry_data.get("osName") or extract_os_from_user_agent(headers.get("user-agent"))
+    os_version = telemetry_data.get("osVersion") or headers.get("x-os-version") or "unknown"
+    brand = telemetry_data.get("deviceBrand") or headers.get("x-device-brand") or "unknown"
+    model = telemetry_data.get("deviceModel") or headers.get("x-device-model") or "unknown"
+    is_emulator = telemetry_data.get("isEmulator", False)
+    is_compromised = telemetry_data.get("isRootedOrJailbroken", False)
+    
+    # 2. Persist time-series record in Analytics DB
+    device_doc = AnalyticsDB.UserDevice.create({
+        "userId": user_id,
+        "role": user.role,
+        "osName": os_name,
+        "osVersion": os_version,
+        "deviceBrand": brand,
+        "deviceModel": model,
+        "batteryLevel": telemetry_data.get("batteryLevel"),
+        "networkType": telemetry_data.get("networkType"),
+        "isEmulator": is_emulator,
+        "isRootedOrJailbroken": is_compromised,
+        "timestamp": now
+    })
+    
+    # 3. Update Core DB User hardware snapshot
+    user.lastDevice = {
+        "osName": os_name,
+        "osVersion": os_version,
+        "deviceBrand": brand,
+        "deviceModel": model,
+        "batteryLevel": telemetry_data.get("batteryLevel"),
+        "isEmulator": is_emulator,
+        "isRootedOrJailbroken": is_compromised,
+        "updatedAt": now
+    }
+    user.save()
+    
+    # 4. Stream to in-memory sliding buffer & push webhook to Admin Sub-Backend
+    stream_payload = {
+        "id": device_doc.id,
+        "userId": user_id,
+        "userName": user.name,
+        "role": user.role,
+        "osName": os_name,
+        "osVersion": os_version,
+        "deviceBrand": brand,
+        "deviceModel": model,
+        "batteryLevel": telemetry_data.get("batteryLevel"),
+        "isEmulator": is_emulator,
+        "isRootedOrJailbroken": is_compromised,
+        "timestamp": now
+    }
+    
+    in_memory_device_buffer.push_front(stream_payload)
+    if in_memory_device_buffer.size() > 1000:
+        in_memory_device_buffer.pop_back()
+        
+    async_post_webhook(ADMIN_SUB_BACKEND_URL + "/api/v1/internal/devices/stream", stream_payload)
+    
+    return device_doc
+```
+
+
 

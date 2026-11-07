@@ -62,6 +62,7 @@ Complete formal engineering documentation has been authored in the project root:
 5. **Algorithm 5 (Intelligent Multi-Field Product Search Engine)**: Multi-field weighted scoring (SKU, title, brand, category, tags), Damerau-Levenshtein typo tolerance (*"iphne"* $\rightarrow$ *"iphone"*, *"chagre"* $\rightarrow$ *"charger"*), academic & cart dwell boost synergy, dynamic facet extraction, autocomplete typeahead, and non-blocking search analytics.
 6. **Algorithm 6 (2-Day Post-Registration Rating & Weekly Re-Prompt Engine)**: Times app and partner rating requests with a strict 2-day delay after signup. Ensures submission permanence (never prompts again once submitted), and executes a 7-day cooldown loop when ignored or dismissed.
 7. **Algorithm 7 (Geospatial Proximity & Real-Time Location Telemetry Pipeline)**: Captures user real-time GPS coordinates, stores them in Analytics DB with MongoDB 2dsphere spherical indexing, and streams live telemetry to the Admin Sub-Backend with sub-second latency.
+8. **Algorithm 8 (Real-Time OS & Device Telemetry Streaming Pipeline)**: Captures user real-time OS (iOS, Android, Web), OS version, device brand, model, battery levels, network types, and security indicators (emulator, root/jailbreak detection), stores telemetry in Analytics DB, updates Core DB user hardware snapshot, and streams to Admin Sub-Backend in real time.
 
 ### 6. Sub-Backend Integration (User Analysis Engine)
 - Dedicated internal API (`/api/v1/internal/user-analysis/*`) protected by `x-engine-secret`.
@@ -94,6 +95,7 @@ All endpoints are mounted under `/api/v1`:
 | `POST` | `/api/v1/users/mobile/request-otp` | Send email OTP to authorize mobile number update | Yes (`Bearer`) |
 | `POST` | `/api/v1/users/mobile/verify-otp` | Verify email OTP & update mobile number | Yes (`Bearer`) |
 | `POST` | `/api/v1/users/location` | Submit real-time GPS coordinates (streams to Admin Sub-Backend) | Yes (`Bearer`) |
+| `POST` | `/api/v1/users/device-telemetry` | Submit real-time OS (iOS/Android) and device telemetry (streams to Admin Sub-Backend) | Yes (`Bearer`) |
 | `DELETE` | `/api/v1/users/me` | Soft delete user account | Yes (`Bearer`) |
 
 ### Admin Product Management (`/api/v1/admin/products`)
@@ -155,6 +157,21 @@ All endpoints are mounted under `/api/v1`:
 | `GET` | `/api/v1/admin/locations/users/:userId/history` | User historical movement track | Yes (`admin`) |
 | `GET` | `/api/v1/admin/locations/nearby` | Spatial search near campus or partner hub | Yes (`admin`) |
 
+### Admin Sub-Backend Real-Time Device Telemetry Streaming (`/api/v1/internal/admin/devices`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/internal/admin/devices/stream` | Polling & sliding-window event stream for Admin Sub-Backend | `x-engine-secret` |
+| `GET` | `/api/v1/internal/admin/devices/analytics` | Aggregated device metrics (iOS vs Android share, top brands/models, security alerts) | `x-engine-secret` |
+| `GET` | `/api/v1/internal/admin/devices/users/:userId/history` | Historical device telemetry timeline for a specific user | `x-engine-secret` |
+
+### Admin Panel Device Dashboard (`/api/v1/admin/devices`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/devices/analytics` | Aggregated fleet device and OS metrics | Yes (`admin`) |
+| `GET` | `/api/v1/admin/devices/users/:userId/history` | User device audit and hardware history | Yes (`admin`) |
+
 ### Version Synchronization & Ecosystem Handshake (`/api/v1/version`)
 
 | Method | Endpoint | Description | Auth Required |
@@ -191,7 +208,7 @@ npm run dev
 # 4. Compile TypeScript
 npm run build
 
-# 5. Run test suites (72/72 passing across all 3 databases & algorithms)
+# 5. Run test suites (82/82 passing across all 7 test suites)
 npm test
 ```
 
