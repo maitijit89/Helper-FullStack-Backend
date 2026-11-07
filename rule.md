@@ -218,3 +218,36 @@ The backend maintains 3 logical databases within the MongoDB cluster:
   - For the next 7 days, prompt eligibility remains `shouldPrompt: false` (`reason: 'weekly_cooldown'`).
   - Once 7 days elapse, the prompt automatically re-engages (`shouldPrompt: true`, `reason: 'eligible_weekly_reprompt'`).
 
+---
+
+## 10. Real-Time Location Grabbing & Admin Sub-Backend Streaming Rules
+
+### Rule 10.1: Coordinate Validation & GeoJSON Standards
+- GPS coordinate pings submitted via `POST /api/v1/users/location` must pass strict bounds validation:
+  - Latitude: $[-90.0, +90.0]$
+  - Longitude: $[-180.0, +180.0]$
+  - Accuracy: $\ge 0$ meters
+- Coordinates are stored as standard MongoDB GeoJSON Point vectors:
+  `{ type: 'Point', coordinates: [longitude, latitude] }` (note longitude precedes latitude per GeoJSON RFC 7946).
+
+### Rule 10.2: Dual-Database Persistence Architecture
+- **Analytics DB (`helping_services_analytics`)**: Stores full telemetry breadcrumb history in `UserLocation` with a `2dsphere` index for high-performance spatial proximity calculations (`$nearSphere`, `$geoWithin`).
+- **Core DB (`helping_services_core`)**: Maintains user's latest real-time position in `User.lastLocation` for zero-overhead identity queries and partner dispatch assignments.
+
+### Rule 10.3: High-Throughput Non-Blocking Sub-Backend Streaming
+- When a user submits a location ping, the Main Backend:
+  1. Stores the document in the database.
+  2. Pushes the event into an in-memory sliding buffer queue (`recentEvents`, max 1000 items).
+  3. Dispatches an asynchronous HTTP webhook to `${env.ADMIN_SUB_BACKEND_URL}/api/v1/internal/locations/stream`.
+  4. Returns HTTP 200 to the mobile client immediately ($< 15$ ms response time).
+
+### Rule 10.4: Admin Sub-Backend Security & Handshake
+- Internal endpoints under `/api/v1/internal/admin/locations/*` are strictly guarded.
+- Incoming calls from the Admin Sub-Backend must furnish a valid `x-engine-secret` or `x-admin-sub-backend-secret` matching `env.ADMIN_SUB_BACKEND_SECRET`.
+- Calls with missing or invalid credentials receive `401 Unauthorized`.
+
+### Rule 10.5: Admin Panel RBAC Authorization
+- Operator dashboard routes under `/api/v1/admin/locations/*` require active admin credentials (`authenticate` + `authorizeRole('admin')`).
+- Unauthorized regular users receive `403 Forbidden`.
+
+

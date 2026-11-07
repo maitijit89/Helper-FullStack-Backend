@@ -332,3 +332,89 @@ def check_rating_prompt_eligibility(user_id, target_type, partner_id=None):
 - **Evaluation Time**: $\mathcal{O}(1)$ via indexed compound lookups (`userId`, `targetType`, `partnerId`).
 - **Storage Footprint**: Minimal single document per user-target pair in Analytics DB, with zero polling write amplification.
 
+---
+
+## Algorithm 7: Geospatial Proximity & Real-Time Location Telemetry Pipeline
+
+### 7.1 Objective
+Capture real-time geographic telemetry (latitude, longitude, speed, heading, accuracy) from student and partner devices, index spatial coordinates on an ellipsoidal Earth model (WGS84), and stream live location states to the Admin Sub-Backend for operational mapping and fleet coordination.
+
+### 7.2 Mathematical Formulation & Great-Circle Distance
+
+#### 1. Haversine Metric
+For any two coordinates on the Earth's surface $P_1 = (\phi_1, \lambda_1)$ and $P_2 = (\phi_2, \lambda_2)$ where $\phi$ is latitude in radians and $\lambda$ is longitude in radians:
+
+$$\Delta \phi = \phi_2 - \phi_1, \quad \Delta \lambda = \lambda_2 - \lambda_1$$
+
+$$a = \sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)$$
+
+$$c = 2 \cdot \arctan2\left(\sqrt{a}, \, \sqrt{1-a}\right)$$
+
+$$d = R \cdot c$$
+
+Where mean Earth radius $R = 6,371,000\text{ meters}$.
+
+#### 2. Spatial Indexing ($2\text{dsphere}$)
+Locations are formatted as GeoJSON Points:
+$$\mathbf{x} = [ \lambda, \, \phi ] \quad (\text{longitude precedes latitude})$$
+
+The `2dsphere` index computes spherical geometry queries ($S_{\text{geo}}$):
+$$S_{\text{geo}}(P_{\text{origin}}, r_{\text{max}}) = \{ u \in \mathcal{U} \mid d(u.\mathbf{x}, P_{\text{origin}}) \le r_{\text{max}} \}$$
+
+Query complexity is $\mathcal{O}(\log N)$ via hierarchical geohash B-tree index traversal.
+
+### 7.3 Algorithmic Pseudo-Code
+
+```python
+def process_realtime_location(user_id, lat, lng, accuracy, speed, heading):
+    # 1. Bounds validation
+    assert -90.0 <= lat <= 90.0
+    assert -180.0 <= lng <= 180.0
+    
+    user = CoreDB.User.findById(user_id)
+    now = current_timestamp()
+    
+    # 2. Persist in Analytics DB
+    location_doc = AnalyticsDB.UserLocation.create({
+        "userId": user_id,
+        "role": user.role,
+        "location": {"type": "Point", "coordinates": [lng, lat]},
+        "latitude": lat,
+        "longitude": lng,
+        "accuracy": accuracy,
+        "speed": speed,
+        "heading": heading,
+        "timestamp": now
+    })
+    
+    # 3. Update User snapshot in Core DB
+    user.lastLocation = {
+        "type": "Point",
+        "coordinates": [lng, lat],
+        "latitude": lat,
+        "longitude": lng,
+        "accuracy": accuracy,
+        "updatedAt": now
+    }
+    user.save()
+    
+    # 4. Stream to Admin Sub-Backend
+    event_payload = {
+        "id": location_doc.id,
+        "userId": user_id,
+        "userName": user.name,
+        "role": user.role,
+        "collegeName": user.collegeName,
+        "latitude": lat,
+        "longitude": lng,
+        "speed": speed,
+        "timestamp": now
+    }
+    
+    in_memory_event_buffer.push_front(event_payload)
+    async_post_webhook(ADMIN_SUB_BACKEND_URL + "/api/v1/internal/locations/stream", event_payload)
+    
+    return location_doc
+```
+
+

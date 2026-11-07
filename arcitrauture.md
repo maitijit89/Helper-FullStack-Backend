@@ -132,6 +132,7 @@ The system utilizes a single clustered connection pool with logical database seg
 |   - SearchHistory: Search queries, timestamps, normalized tokens, and result counts for trending.  |
 |   - Rating: Star reviews (1-5) and optional text feedback for App and Partners.                    |
 |   - RatingPromptState: Prompt lifecycle state (2-day cooldown, submission flag, 7-day reprompt).   |
+|   - UserLocation: Real-time GPS coordinates, speed, battery, and 2dsphere spatial index.           |
 +----------------------------------------------------------------------------------------------------+
 ```
 
@@ -156,6 +157,14 @@ The Main Backend is designed to act as the primary operational coordinator while
 - **Integration Touchpoints**:
   - Consumes `/api/v1/products/feed` with JWT auth or guest mode.
   - Consumes `/api/v1/products/:id/suggestions` for instant cross-sell carousels.
+
+### Sub-Backend 3: Admin Operations & Real-Time Tracking Engine (Admin Sub-Backend)
+- **Role**: Ingests real-time student and partner GPS telemetries for campus safety, live fleet dispatch, delivery tracking, and administrative heatmaps.
+- **Integration Touchpoints**:
+  1. **Webhook Ingestion (`POST ${env.ADMIN_SUB_BACKEND_URL}/api/v1/internal/locations/stream`)**: Receives real-time GPS pings pushed from the Main Backend.
+  2. **Streaming & Polling Interface (`GET /api/v1/internal/admin/locations/stream`)**: Pulls buffered location event streams with sub-second latency.
+  3. **Live Spatial Query Interface (`GET /api/v1/internal/admin/locations/live` & `/nearby`)**: Queries active users within radius of any campus coordinate.
+- **Security**: Guarded by `x-engine-secret` or `x-admin-sub-backend-secret` matching `env.ADMIN_SUB_BACKEND_SECRET`.
 
 ---
 
@@ -223,4 +232,45 @@ The Main Backend is designed to act as the primary operational coordinator while
    - Guaranteed idempotency via compound unique index: `{ userId: 1, targetType: 1, partnerId: 1 }`.
 3. **Decoupled Metric Aggregation**:
    - Reviews and stars are computed using indexed MongoDB `$group` aggregation pipelines for instant average star calculations and distribution breakdowns (1 to 5 stars).
+
+---
+
+## 8. Real-Time Location Telemetry & Admin Sub-Backend Streaming Topology
+
+```
++--------------------------------------------------------------------------------------------------+
+|                                    USER APP MOBILE CLIENT                                        |
+|                          (GPS Sensors: lat, lng, speed, accuracy)                                |
++--------------------------------------------------------------------------------------------------+
+                                                |
+                                                | POST /api/v1/users/location (Bearer JWT)
+                                                v
++--------------------------------------------------------------------------------------------------+
+|                                      MAIN BACKEND (v1.2.1)                                       |
++--------------------------------------------------------------------------------------------------+
+          |                                     |                                    |
+          v                                     v                                    v
++--------------------+               +--------------------+              +-------------------------+
+| 1. Core DB         |               | 2. Analytics DB    |              | 3. In-Memory Event      |
+| Update             |               | Create UserLocation|              | Buffer (Max 1000 items) |
+| User.lastLocation  |               | (2dsphere index)   |              +-------------------------+
++--------------------+               +--------------------+                          |
+                                                                                     | Async Push Webhook /
+                                                                                     | GET /stream Polling
+                                                                                     v
+                                                                 +---------------------------------+
+                                                                 | ADMIN SUB-BACKEND               |
+                                                                 | - Live Map Dashboard Engine     |
+                                                                 | - Geofencing & Fleet Dispatch   |
+                                                                 | - Safety & Emergency Monitoring |
+                                                                 +---------------------------------+
+```
+
+1. **Dual DB Ingestion**:
+   - Updates `User.lastLocation` (Core DB) for profile and identity lookups.
+   - Appends historical telemetry record in `UserLocation` (Analytics DB) with GeoJSON `Point` for 2dsphere indexing.
+2. **Sub-Backend Streaming Pipeline**:
+   - The in-memory sliding buffer decouples mobile submission latency from sub-backend network variability.
+   - Pushes telemetry events via HTTP POST to the Admin Sub-Backend and exposes high-speed polling endpoints (`/api/v1/internal/admin/locations/*`).
+
 

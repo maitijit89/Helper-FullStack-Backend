@@ -61,6 +61,7 @@ Complete formal engineering documentation has been authored in the project root:
 4. **Algorithm 4 (3-Day Registration Abandonment Reminder Engine)**: Recovers dropped signups by detecting unverified applicants after 3 days and dropping a fresh OTP and activation reminder.
 5. **Algorithm 5 (Intelligent Multi-Field Product Search Engine)**: Multi-field weighted scoring (SKU, title, brand, category, tags), Damerau-Levenshtein typo tolerance (*"iphne"* $\rightarrow$ *"iphone"*, *"chagre"* $\rightarrow$ *"charger"*), academic & cart dwell boost synergy, dynamic facet extraction, autocomplete typeahead, and non-blocking search analytics.
 6. **Algorithm 6 (2-Day Post-Registration Rating & Weekly Re-Prompt Engine)**: Times app and partner rating requests with a strict 2-day delay after signup. Ensures submission permanence (never prompts again once submitted), and executes a 7-day cooldown loop when ignored or dismissed.
+7. **Algorithm 7 (Geospatial Proximity & Real-Time Location Telemetry Pipeline)**: Captures user real-time GPS coordinates, stores them in Analytics DB with MongoDB 2dsphere spherical indexing, and streams live telemetry to the Admin Sub-Backend with sub-second latency.
 
 ### 6. Sub-Backend Integration (User Analysis Engine)
 - Dedicated internal API (`/api/v1/internal/user-analysis/*`) protected by `x-engine-secret`.
@@ -92,6 +93,7 @@ All endpoints are mounted under `/api/v1`:
 | `PATCH` | `/api/v1/users/me` | Update allowed profile fields (name, DOB, gender) | Yes (`Bearer`) |
 | `POST` | `/api/v1/users/mobile/request-otp` | Send email OTP to authorize mobile number update | Yes (`Bearer`) |
 | `POST` | `/api/v1/users/mobile/verify-otp` | Verify email OTP & update mobile number | Yes (`Bearer`) |
+| `POST` | `/api/v1/users/location` | Submit real-time GPS coordinates (streams to Admin Sub-Backend) | Yes (`Bearer`) |
 | `DELETE` | `/api/v1/users/me` | Soft delete user account | Yes (`Bearer`) |
 
 ### Admin Product Management (`/api/v1/admin/products`)
@@ -136,6 +138,23 @@ All endpoints are mounted under `/api/v1`:
 | `POST` | `/api/v1/internal/user-analysis/sync` | Sync segment weights & feed instruction overrides | `x-engine-secret` |
 | `GET` | `/api/v1/internal/user-analysis/events` | Stream raw interaction events for ML training | `x-engine-secret` |
 
+### Admin Sub-Backend Real-Time Location Streaming (`/api/v1/internal/admin/locations`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/internal/admin/locations/stream` | Polling & event stream for Admin Sub-Backend | `x-engine-secret` |
+| `GET` | `/api/v1/internal/admin/locations/live` | Real-time live coordinates of all active users | `x-engine-secret` |
+| `GET` | `/api/v1/internal/admin/locations/users/:userId/history` | Historical breadcrumb trajectory for a user | `x-engine-secret` |
+| `GET` | `/api/v1/internal/admin/locations/nearby` | Geospatial 2dsphere proximity search | `x-engine-secret` |
+
+### Admin Panel Location Dashboard (`/api/v1/admin/locations`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/locations/live` | Live map dashboard coordinates of active users | Yes (`admin`) |
+| `GET` | `/api/v1/admin/locations/users/:userId/history` | User historical movement track | Yes (`admin`) |
+| `GET` | `/api/v1/admin/locations/nearby` | Spatial search near campus or partner hub | Yes (`admin`) |
+
 ### Version Synchronization & Ecosystem Handshake (`/api/v1/version`)
 
 | Method | Endpoint | Description | Auth Required |
@@ -171,6 +190,6 @@ npm run dev
 # 4. Compile TypeScript
 npm run build
 
-# 5. Run test suites (62/62 passing across all 3 databases & algorithms)
+# 5. Run test suites (72/72 passing across all 3 databases & algorithms)
 npm test
 ```

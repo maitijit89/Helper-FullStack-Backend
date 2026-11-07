@@ -276,4 +276,47 @@ sequenceDiagram
     end
 ```
 
+---
+
+## 10. Real-Time Location Grabbing & Admin Sub-Backend Streaming Flowchart
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as User Mobile App (Helping Services)
+    participant Main as Main Backend (/api/v1/users/location)
+    participant CoreDB as Core DB (User.lastLocation)
+    participant AnalyticsDB as Analytics DB (UserLocation 2dsphere)
+    participant Buffer as In-Memory Event Queue
+    participant AdminSub as Admin Sub-Backend (Operations Engine)
+
+    App->>Main: POST /api/v1/users/location (Bearer JWT)<br/>{ latitude, longitude, accuracy, speed, heading, battery }
+    
+    par Dual Database Persistence
+        Main->>AnalyticsDB: Insert UserLocation (GeoJSON Point [lng, lat])
+        AnalyticsDB-->>Main: Telemetry Recorded
+    and
+        Main->>CoreDB: Update User.lastLocation
+        CoreDB-->>Main: User Snapshot Updated
+    and
+        Main->>Buffer: Push streamEvent to sliding window queue
+    end
+
+    Main-->>App: 200 OK (Location Recorded & Streamed)
+
+    par Admin Sub-Backend Real-Time Delivery
+        opt When ADMIN_SUB_BACKEND_URL is configured
+            Main->>AdminSub: POST /api/v1/internal/locations/stream (x-engine-secret)<br/>{ userId, userName, role, lat, lng, speed, timestamp }
+            AdminSub-->>Main: 200 OK (Acknowledged)
+        end
+    and Polling / Live Query Surface
+        AdminSub->>Main: GET /api/v1/internal/admin/locations/stream (x-engine-secret)
+        Main-->>AdminSub: 200 OK (Buffered location events)
+    and Live Active Map
+        AdminSub->>Main: GET /api/v1/internal/admin/locations/live?maxAgeMinutes=15
+        Main-->>AdminSub: 200 OK (All active users on map)
+    end
+```
+
+
 

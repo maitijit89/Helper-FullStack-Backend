@@ -8,6 +8,8 @@ import cartRouter from './cart.route';
 import internalAnalysisRouter from './internal-analysis.route';
 import versionRouter from './version.route';
 import ratingRouter from './rating.route';
+import adminLocationRouter from './admin-location.route';
+import internalAdminRouter from './internal-admin.route';
 import { reminderService } from '../services/reminder.service';
 
 const apiRouter = Router();
@@ -24,22 +26,28 @@ apiRouter.use('/users', userRouter);
 // 4. Admin Product Management (Admin Panel Uploads & Accessory Linking)
 apiRouter.use('/admin/products', adminProductRouter);
 
-// 5. Product Catalog & Personalized Feed (User App Listing System)
+// 5. Admin Panel Real-Time Location Dashboard
+apiRouter.use('/admin/locations', adminLocationRouter);
+
+// 6. Product Catalog & Personalized Feed (User App Listing System)
 apiRouter.use('/products', productRouter);
 
-// 6. User Cart & Dwell Time Intent Tracking
+// 7. User Cart & Dwell Time Intent Tracking
 apiRouter.use('/cart', cartRouter);
 
-// 7. Sub-Backend User Analysis Engine Interface
+// 8. Sub-Backend User Analysis Engine Interface
 apiRouter.use('/internal/user-analysis', internalAnalysisRouter);
 
-// 8. Version Synchronization & Ecosystem Handshake
+// 9. Sub-Backend Admin Real-Time Location Streaming Interface
+apiRouter.use('/internal/admin/locations', internalAdminRouter);
+
+// 10. Version Synchronization & Ecosystem Handshake
 apiRouter.use('/version', versionRouter);
 
-// 9. App and Partner Rating & Prompt Scheduling Engine
+// 11. App and Partner Rating & Prompt Scheduling Engine
 apiRouter.use('/ratings', ratingRouter);
 
-// 10. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
+// 12. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
 apiRouter.post('/reminders/run', async (_req, res, next) => {
   try {
     const result = await reminderService.processPendingReminders();

@@ -21,6 +21,14 @@ export interface IUser extends Document {
   weight?: number;
   course?: CourseType;
   department?: string;
+  lastLocation?: {
+    type: 'Point';
+    coordinates: [number, number]; // [longitude, latitude]
+    latitude: number;
+    longitude: number;
+    accuracy?: number;
+    updatedAt: Date;
+  };
   isDeleted: boolean;
   deletedAt?: Date;
   createdAt: Date;
@@ -113,6 +121,20 @@ export const UserSchema = new Schema<IUser>(
       type: String,
       trim: true,
     },
+    lastLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number], // [longitude, latitude]
+      },
+      latitude: Number,
+      longitude: Number,
+      accuracy: Number,
+      updatedAt: Date,
+    },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -134,6 +156,8 @@ export const UserSchema = new Schema<IUser>(
     },
   }
 );
+
+UserSchema.index({ 'lastLocation.coordinates': '2dsphere' }, { sparse: true });
 
 // Filter out soft-deleted users by default in queries
 UserSchema.pre(/^find/, function (this: any, next) {

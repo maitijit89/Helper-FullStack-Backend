@@ -8,6 +8,8 @@ import {
   requestMobileChangeOtpSchema,
   verifyMobileChangeOtpSchema,
 } from '../schemas/user.schema';
+import { updateLocationSchema } from '../schemas/location.schema';
+import { locationService } from '../services/location.service';
 
 const router = Router();
 
@@ -66,6 +68,30 @@ router.patch(
         success: true,
         message: 'Profile updated successfully.',
         data: updatedUser,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+/**
+ * @route   POST /api/v1/users/location
+ * @desc    Submit user real-time GPS location update (latitude, longitude, accuracy, speed, heading).
+ *          Persists telemetry in Analytics DB, updates user.lastLocation in Core DB,
+ *          and streams location event to Admin Sub-Backend.
+ */
+router.post(
+  '/location',
+  validateBody(updateLocationSchema),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const result = await locationService.recordUserLocation(req.user!.id, req.body);
+      res.status(200).json({
+        success: true,
+        message: 'Real-time location updated and streamed to Admin Sub-Backend.',
+        data: result.location,
+        forwardedToAdminSubBackend: result.forwardedToAdminSubBackend,
       });
     } catch (error) {
       next(error);

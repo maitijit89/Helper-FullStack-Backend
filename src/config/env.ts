@@ -59,6 +59,10 @@ export const env = {
   ANALYSIS_ENGINE_SECRET: process.env.ANALYSIS_ENGINE_SECRET || 'helping-services-analysis-engine-secret-2026',
   CART_DWELL_BOOST_MINUTES: parseInt(process.env.CART_DWELL_BOOST_MINUTES || '15', 10),
 
+  // Sub-Backend Integration (Admin Operations & Real-Time Location Engine)
+  ADMIN_SUB_BACKEND_URL: process.env.ADMIN_SUB_BACKEND_URL || '',
+  ADMIN_SUB_BACKEND_SECRET: process.env.ADMIN_SUB_BACKEND_SECRET || 'helping-services-admin-sub-backend-secret-2026',
+
   // Cache: Upstash Redis
   REDIS_URL: process.env.REDIS_URL || process.env.UPSTASH_REDIS_URL || '',
   UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL || '',
