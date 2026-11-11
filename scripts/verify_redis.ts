@@ -46,3 +46,4 @@ testRedis()
     console.error('[FAILED] Redis test failed:', err);
     process.exit(1);
   });
+

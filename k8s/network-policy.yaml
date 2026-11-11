@@ -49,6 +49,8 @@ spec:
           port: 6379
         - protocol: TCP
           port: 587
+        - protocol: TCP
+          port: 465
     # Allow internal communication with Sub-Backends inside the cluster
     - to:
         - podSelector: {}
