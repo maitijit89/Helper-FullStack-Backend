@@ -24,7 +24,7 @@ export class CloudflareR2Service {
     if (accessKeyId && secretAccessKey && this.bucket && endpoint) {
       try {
         const isSupabase = endpoint.includes('supabase.co');
-        const region = process.env.STORAGE_REGION || (isSupabase ? 'ap-south-1' : 'auto');
+        const region = env.STORAGE_REGION || (isSupabase ? 'ap-southeast-2' : 'auto');
 
         this.client = new S3Client({
           region,
