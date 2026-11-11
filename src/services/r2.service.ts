@@ -23,20 +23,26 @@ export class CloudflareR2Service {
 
     if (accessKeyId && secretAccessKey && this.bucket && endpoint) {
       try {
+        const isSupabase = endpoint.includes('supabase.co');
+        const region = process.env.STORAGE_REGION || (isSupabase ? 'ap-south-1' : 'auto');
+
         this.client = new S3Client({
-          region: 'auto', // Cloudflare R2 requires region: 'auto'
+          region,
           endpoint,
+          forcePathStyle: true, // Enables universal compatibility for Supabase S3, MinIO, and Cloudflare R2
           credentials: {
             accessKeyId,
             secretAccessKey,
           },
         });
-        logger.info(`Initialized Cloudflare R2 Storage Service (bucket: ${this.bucket})`);
+        logger.info(
+          `Initialized Object Storage Service (${isSupabase ? 'Supabase S3' : 'Cloudflare R2'}, bucket: ${this.bucket})`
+        );
       } catch (err: any) {
-        logger.warn(`Failed to initialize Cloudflare R2 client: ${err.message}`);
+        logger.warn(`Failed to initialize Object Storage client: ${err.message}`);
       }
     } else {
-      logger.info('Cloudflare R2 credentials not configured.');
+      logger.info('Object Storage credentials not configured.');
     }
   }
 
@@ -45,7 +51,8 @@ export class CloudflareR2Service {
   }
 
   get provider(): string {
-    return this.isConfigured ? 'cloudflare-r2' : 'unconfigured';
+    if (!this.isConfigured) return 'unconfigured';
+    return env.CLOUDFLARE_R2_ENDPOINT?.includes('supabase.co') ? 'supabase-storage' : 'cloudflare-r2';
   }
 
   async putObject(
