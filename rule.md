@@ -441,6 +441,29 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - `GET /api/v1/ping/stream` establishes a persistent HTTP text/event-stream connection emitting real-time heartbeat frames every 5 seconds.
 - Passing `?once=true` closes the stream immediately after the initial frame for test verification and handshake probes.
 
+---
+
+## 19. Defensive Security, Penetration Hardening & Injection Mitigation Rules
+
+### Rule 19.1: ReDoS & Regular Expression Injection Defense (CWE-1333 / CWE-400)
+- All user-supplied string search parameters (including `q`, `search`, `category`, and `brand`) MUST be sanitized using `escapeRegex` before passing into `new RegExp(..., 'i')`.
+- Direct unescaped regex compilation is strictly prohibited to prevent syntax error crashes (e.g. unclosed groups) and catastrophic backtracking Denial-of-Service attacks.
+
+### Rule 19.2: Mongoose CastError & Malformed Identifier Handling (CWE-703)
+- When client requests submit non-hex or malformed ObjectIds (e.g. `GET /api/v1/orders/:id`, `GET /api/v1/products/:id`, `PATCH /api/v1/notifications/:id/read`), the centralized error handler intercepts `CastError` and returns `400 Bad Request` (`Invalid format for parameter 'field'`), rather than throwing an unhandled 500 error.
+
+### Rule 19.3: Constant-Time Sub-Backend Authentication (CWE-208)
+- Verification of shared secrets between microservices and sub-backends (`x-engine-secret`, `x-admin-sub-backend-secret`) MUST use constant-time buffer comparison via `timingSafeEqualString` (`crypto.timingSafeEqual`).
+- Direct equality operators (`!==` or `===`) on sensitive secrets are prohibited to eliminate side-channel timing analysis vectors.
+
+### Rule 19.4: Dedicated Authentication Rate Limiting (CWE-307)
+- Sensitive credential and OTP issuance endpoints (`/api/v1/auth/register`, `/api/v1/auth/register/resend-otp`, `/api/v1/auth/login/request-otp`, `/api/v1/auth/login/verify-otp`, `/api/v1/users/mobile/request-otp`, `/api/v1/users/mobile/verify-otp`) are gated by a dedicated `authRateLimiter` (15 requests per 15 minutes per IP) in addition to global standard rate limits.
+
+### Rule 19.5: Mass-Assignment & Insecure Direct Object Reference (IDOR) Hardening
+- Profile updates via `PATCH /api/v1/users/me` enforce strict field whitelisting and actively reject attempts to alter registered `email` or mutate authorization `role`/`isAdmin` flags.
+- All single-resource lookups, updates, and cancellations (`Order`, `Notification`, `Cart`) enforce explicit ownership checks matching authenticated `req.user.id`, returning `403 Forbidden` or `404 Not Found` for unauthorized tenant access.
+
+
 
 
 
