@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { locationService } from '../services/location.service';
 import { env } from '../config/env';
 import { UnauthorizedException } from '../middlewares/errorHandler';
+import { timingSafeEqualString } from '../utils/security.utils';
 import {
   nearbyLocationQuerySchema,
   locationHistoryQuerySchema,
@@ -33,7 +34,11 @@ function verifyAdminSubBackendSecret(
     env.ANALYSIS_ENGINE_SECRET,
   ];
 
-  if (!providedSecret || !validSecrets.includes(providedSecret)) {
+  const isValid =
+    !!providedSecret &&
+    validSecrets.some((secret) => timingSafeEqualString(providedSecret, secret));
+
+  if (!isValid) {
     return next(
       new UnauthorizedException(
         'Unauthorized. Invalid Admin Sub-Backend secret credentials.'

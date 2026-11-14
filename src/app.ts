@@ -55,6 +55,7 @@ export function createApp(): Express {
         'x-app-version',
         'x-client-platform',
         'x-engine-secret',
+        'x-admin-sub-backend-secret',
       ],
       exposedHeaders: [
         'x-backend-version',

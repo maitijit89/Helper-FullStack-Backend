@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authService } from '../services/auth.service';
 import { validateBody } from '../middlewares/validate';
 import { authenticate } from '../middlewares/auth';
+import { authRateLimiter } from '../middlewares/rateLimiter';
 import {
   registerSchema,
   verifyRegistrationOtpSchema,
@@ -18,6 +19,7 @@ const router = Router();
  */
 router.post(
   '/register',
+  authRateLimiter,
   validateBody(registerSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -65,6 +67,7 @@ router.post(
  */
 router.post(
   '/register/resend-otp',
+  authRateLimiter,
   validateBody(resendRegistrationOtpSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -85,6 +88,7 @@ router.post(
  */
 router.post(
   '/login/request-otp',
+  authRateLimiter,
   validateBody(loginRequestOtpSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -108,6 +112,7 @@ router.post(
  */
 router.post(
   '/login/verify-otp',
+  authRateLimiter,
   validateBody(loginVerifyOtpSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

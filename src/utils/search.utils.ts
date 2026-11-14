@@ -33,6 +33,14 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
+ * Escapes special regular expression metacharacters to safely use user input in RegExp queries
+ * Preventing ReDoS and unhandled SyntaxError attacks
+ */
+export function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
  * Computes Levenshtein edit distance between two strings
  */
 export function levenshteinDistance(a: string, b: string): number {

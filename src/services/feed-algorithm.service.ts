@@ -3,6 +3,7 @@ import { User, IUser } from '../models/User';
 import { Cart } from '../models/Cart';
 import { UserInterestProfile } from '../models/UserInterestProfile';
 import { env } from '../config/env';
+import { escapeRegex } from '../utils/search.utils';
 
 export interface ScoredProduct {
   product: IProduct;
@@ -39,7 +40,7 @@ export class FeedAlgorithmService {
 
     const filter: Record<string, any> = { isDeleted: false, isActive: true };
     if (query.category) {
-      filter.category = new RegExp(`^${query.category.trim()}$`, 'i');
+      filter.category = new RegExp(`^${escapeRegex(query.category.trim())}$`, 'i');
     }
 
     const candidateProducts: IProduct[] = await Product.find(filter);

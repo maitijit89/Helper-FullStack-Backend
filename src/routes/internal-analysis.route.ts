@@ -4,6 +4,7 @@ import { validateBody } from '../middlewares/validate';
 import { syncUserAnalysisSchema } from '../schemas/analysis.schema';
 import { env } from '../config/env';
 import { UnauthorizedException } from '../middlewares/errorHandler';
+import { timingSafeEqualString } from '../utils/security.utils';
 
 const router = Router();
 
@@ -15,7 +16,7 @@ function verifyAnalysisEngineSecret(req: Request, _res: Response, next: NextFunc
 
   const providedSecret = secretHeader || token;
 
-  if (!providedSecret || providedSecret !== env.ANALYSIS_ENGINE_SECRET) {
+  if (!providedSecret || !timingSafeEqualString(providedSecret, env.ANALYSIS_ENGINE_SECRET)) {
     return next(new UnauthorizedException('Unauthorized. Invalid User Analysis Engine secret.'));
   }
 

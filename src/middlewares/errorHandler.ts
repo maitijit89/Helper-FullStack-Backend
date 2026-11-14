@@ -85,6 +85,18 @@ export function errorHandler(
     return;
   }
 
+  // Handle Mongoose CastError (e.g. invalid ObjectId format in URL params)
+  if (err.name === 'CastError') {
+    const field = err.path || 'id';
+    const message = `Invalid format for parameter '${field}'.`;
+    res.status(400).json({
+      success: false,
+      message,
+      detail: message,
+    });
+    return;
+  }
+
   // Handle generic errors with explicit HTTP status codes
   if (err.statusCode && typeof err.statusCode === 'number' && err.statusCode < 500) {
     res.status(err.statusCode).json({

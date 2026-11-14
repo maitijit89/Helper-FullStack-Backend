@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { userService } from '../services/user.service';
 import { authenticate } from '../middlewares/auth';
 import { validateBody } from '../middlewares/validate';
+import { authRateLimiter } from '../middlewares/rateLimiter';
 import {
   completeProfileSchema,
   updateProfileSchema,
@@ -138,6 +139,7 @@ router.post(
  */
 router.post(
   '/mobile/request-otp',
+  authRateLimiter,
   validateBody(requestMobileChangeOtpSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -158,6 +160,7 @@ router.post(
  */
 router.post(
   '/mobile/verify-otp',
+  authRateLimiter,
   validateBody(verifyMobileChangeOtpSchema),
   async (req: Request, res: Response, next: NextFunction) => {
     try {

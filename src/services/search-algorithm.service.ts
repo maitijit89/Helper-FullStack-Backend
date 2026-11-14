@@ -8,6 +8,7 @@ import {
   tokenizeQuery,
   calculateSimilarity,
   findClosestTerm,
+  escapeRegex,
 } from '../utils/search.utils';
 import { env } from '../config/env';
 
@@ -80,10 +81,10 @@ export class SearchAlgorithmService {
     const filter: Record<string, any> = { isDeleted: false, isActive: true };
 
     if (options.category) {
-      filter.category = new RegExp(`^${options.category.trim()}$`, 'i');
+      filter.category = new RegExp(`^${escapeRegex(options.category.trim())}$`, 'i');
     }
     if (options.brand) {
-      filter.brand = new RegExp(`^${options.brand.trim()}$`, 'i');
+      filter.brand = new RegExp(`^${escapeRegex(options.brand.trim())}$`, 'i');
     }
     if (options.minPrice !== undefined || options.maxPrice !== undefined) {
       filter.price = {};
@@ -384,8 +385,9 @@ export class SearchAlgorithmService {
       return { query: prefix, products: [], categories: [], brands: [] };
     }
 
-    const regex = new RegExp(`^${trimmed}`, 'i');
-    const anywhereRegex = new RegExp(trimmed, 'i');
+    const escaped = escapeRegex(trimmed);
+    const regex = new RegExp(`^${escaped}`, 'i');
+    const anywhereRegex = new RegExp(escaped, 'i');
 
     const [matchedProducts, matchedCategories, matchedBrands] = await Promise.all([
       Product.find({

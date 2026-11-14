@@ -4,6 +4,7 @@ import { ProductEvent } from '../models/ProductEvent';
 import { UserInterestProfile } from '../models/UserInterestProfile';
 import { CreateProductInput, UpdateProductInput } from '../schemas/product.schema';
 import { NotFoundException, ConflictException } from '../middlewares/errorHandler';
+import { escapeRegex } from '../utils/search.utils';
 
 function generateSlug(title: string): string {
   const base = title
@@ -103,7 +104,7 @@ export class ProductService {
     const filter: Record<string, any> = { isDeleted: false, isActive: true };
 
     if (query.category) {
-      filter.category = new RegExp(`^${query.category.trim()}$`, 'i');
+      filter.category = new RegExp(`^${escapeRegex(query.category.trim())}$`, 'i');
     }
 
     if (query.isFeatured !== undefined) {
@@ -117,7 +118,7 @@ export class ProductService {
     }
 
     if (query.search) {
-      const searchRegex = new RegExp(query.search.trim(), 'i');
+      const searchRegex = new RegExp(escapeRegex(query.search.trim()), 'i');
       filter.$or = [
         { title: searchRegex },
         { description: searchRegex },
