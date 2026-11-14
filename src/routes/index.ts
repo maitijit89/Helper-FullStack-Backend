@@ -12,6 +12,8 @@ import adminLocationRouter from './admin-location.route';
 import internalAdminRouter from './internal-admin.route';
 import adminDeviceRouter from './admin-device.route';
 import internalAdminDeviceRouter from './internal-admin-device.route';
+import notificationRouter from './notification.route';
+import adminNotificationRouter from './admin-notification.route';
 import { reminderService } from '../services/reminder.service';
 
 const apiRouter = Router();
@@ -55,7 +57,13 @@ apiRouter.use('/version', versionRouter);
 // 13. App and Partner Rating & Prompt Scheduling Engine
 apiRouter.use('/ratings', ratingRouter);
 
-// 14. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
+// 14. In-App Notifications & Device Push System (User App)
+apiRouter.use('/notifications', notificationRouter);
+
+// 15. Admin Notification Targeted Dispatch & Broadcasting Dashboard
+apiRouter.use('/admin/notifications', adminNotificationRouter);
+
+// 16. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
 apiRouter.post('/reminders/run', async (_req, res, next) => {
   try {
     const result = await reminderService.processPendingReminders();

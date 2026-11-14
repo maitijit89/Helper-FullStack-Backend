@@ -319,6 +319,41 @@ The backend maintains 3 logical databases within the MongoDB cluster:
   - `batteryLevel` & `networkType`: Identifies device constraints for adaptive polling and streaming rates.
 - Telemetry records flagging jailbroken or rooted hardware are surfaced as security alerts in the Admin Sub-Backend analytics dashboard.
 
+---
+
+## 13. In-App and Device Push Notification System Rules
+
+### Rule 13.1: Dual-Channel Delivery Pipeline
+- Every user notification consists of two synchronized layers:
+  1. **In-App Notification**: Persistent database document stored in the Core DB (`Notification` collection), displayed within the User App inbox/notification drawer.
+  2. **Device Push Notification**: Real-time push dispatched to the user's hardware device (FCM for Android, APNs for iOS, Web Push) via registered device tokens.
+- Creating an in-app notification triggers an asynchronous push delivery attempt across all active device tokens associated with the recipient user.
+
+### Rule 13.2: Device Token Lifecycle & Hygiene
+- Mobile and web clients register device push tokens via `POST /api/v1/notifications/device-token`.
+- Tokens are stored in the Core DB (`DeviceToken` collection) with compound indexing on `{ userId: 1, token: 1 }` and a global unique constraint on `{ token: 1 }`.
+- Re-registering an existing token rebinds it to the active user session and marks `isActive: true`.
+- User logout must call `DELETE /api/v1/notifications/device-token` to set `isActive: false`, immediately preventing push leakages to shared or handed-over devices.
+
+### Rule 13.3: Non-Blocking Dispatch & Graceful Fallback
+- In-app notification creation must never block client responses:
+  - The notification document is committed to Core DB first.
+  - Push delivery is executed asynchronously through `PushNotificationService`.
+  - When external push credentials (FCM) are not configured, the service logs structured delivery receipts and falls back to simulation mode without throwing unhandled exceptions.
+  - If a user has no active device tokens, push status is recorded as `skipped` without raising an error.
+
+### Rule 13.4: Inbox State & Unread Counter Guarantees
+- Unread badge counters (`GET /api/v1/notifications/unread-count`) query only active, unread, unarchived records (`{ userId, isRead: false, isArchived: false }`).
+- Marking an item as read (`PATCH /api/v1/notifications/:id/read`) sets `isRead: true` and records `readAt: Date`.
+- Bulk read (`PATCH /api/v1/notifications/read-all`) updates all active unread records for that user in a single atomic database operation.
+- Deleting an item (`DELETE /api/v1/notifications/:id`) performs a soft archive (`isArchived: true`), removing it from active inbox views while preserving delivery audit trails.
+
+### Rule 13.5: Admin Notification RBAC & Broadcast Safeguards
+- Admin targeted sending (`POST /api/v1/admin/notifications/send`) and broadcasting (`POST /api/v1/admin/notifications/broadcast`) require strict `admin` role authentication.
+- Non-admin attempts return `403 Forbidden`.
+- Broadcast operations fan out to active users matching role criteria, inserting in-app records and executing multicast push dispatches in bounded batches.
+
+
 
 
 

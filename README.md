@@ -28,7 +28,7 @@ Complete formal engineering documentation has been authored in the project root:
 
 | Database Identifier | Logical DB Name | Responsibilities & Collections |
 | :--- | :--- | :--- |
-| **1. Core / Identity DB** | `helping_services_core` | `User` (verified users, roles, academic profile), `PendingRegistration` (isolated pre-verified drafts), `OtpVerification` (TTL auto-expiring login/mobile OTPs). |
+| **1. Core / Identity DB** | `helping_services_core` | `User` (verified users, roles, academic profile), `PendingRegistration` (isolated pre-verified drafts), `OtpVerification` (TTL auto-expiring login/mobile OTPs), `Notification` (in-app messages, read state, delivery tracking), `DeviceToken` (hardware FCM/APNs push tokens). |
 | **2. Product Catalog DB** | `helping_services_catalog` | `Product` (admin-uploaded products, SKUs, inventory, compatible accessory mappings), `Category` (taxonomy & accessory categories). |
 | **3. Analytics & Intelligence DB** | `helping_services_analytics` | `Cart` (active cart items with granular `addedAt` dwell timestamps), `UserInterestProfile` (category affinities, tag weights, sub-backend instructions), `ProductEvent` (telemetry stream). |
 
@@ -63,6 +63,7 @@ Complete formal engineering documentation has been authored in the project root:
 6. **Algorithm 6 (2-Day Post-Registration Rating & Weekly Re-Prompt Engine)**: Times app and partner rating requests with a strict 2-day delay after signup. Ensures submission permanence (never prompts again once submitted), and executes a 7-day cooldown loop when ignored or dismissed.
 7. **Algorithm 7 (Geospatial Proximity & Real-Time Location Telemetry Pipeline)**: Captures user real-time GPS coordinates, stores them in Analytics DB with MongoDB 2dsphere spherical indexing, and streams live telemetry to the Admin Sub-Backend with sub-second latency.
 8. **Algorithm 8 (Real-Time OS & Device Telemetry Streaming Pipeline)**: Captures user real-time OS (iOS, Android, Web), OS version, device brand, model, battery levels, network types, and security indicators (emulator, root/jailbreak detection), stores telemetry in Analytics DB, updates Core DB user hardware snapshot, and streams to Admin Sub-Backend in real time.
+9. **Algorithm 9 (In-App Notification Fan-Out & Device Push Token Hygiene Pipeline)**: Delivers synchronized dual-channel notifications (persistent in-app inbox document + instant hardware push). Manages device push tokens with automatic reassignment, logout deactivation, unread badging, bulk read updates, and role-based multicast broadcasting.
 
 ### 6. Sub-Backend Integration (User Analysis Engine)
 - Dedicated internal API (`/api/v1/internal/user-analysis/*`) protected by `x-engine-secret`.
@@ -190,6 +191,28 @@ All endpoints are mounted under `/api/v1`:
 | `GET` | `/api/v1/ratings` | List all ratings with pagination and star filter | No |
 | `POST` | `/api/v1/ratings/reminders/run` | Scheduled worker scanning users due for rating requests | No |
 
+### In-App Notifications & Device Push (`/api/v1/notifications`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/notifications` | Paginated in-app notifications inbox with unread counter | Yes (`Bearer`) |
+| `GET` | `/api/v1/notifications/unread-count` | Get total unread in-app notification count for badging | Yes (`Bearer`) |
+| `PATCH` | `/api/v1/notifications/:id/read` | Mark single notification as read | Yes (`Bearer`) |
+| `PATCH` | `/api/v1/notifications/read-all` | Mark all notifications as read in bulk | Yes (`Bearer`) |
+| `DELETE` | `/api/v1/notifications/:id` | Archive/delete notification from inbox | Yes (`Bearer`) |
+| `POST` | `/api/v1/notifications/device-token` | Register or update device push token (FCM/APNs) | Yes (`Bearer`) |
+| `DELETE` | `/api/v1/notifications/device-token` | Unregister/deactivate device push token on logout | Yes (`Bearer`) |
+| `GET` | `/api/v1/notifications/devices` | List registered devices and tokens for current user | Yes (`Bearer`) |
+
+### Admin Notification Dashboard & Operations (`/api/v1/admin/notifications`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/admin/notifications/send` | Send targeted in-app notification & device push to specific user | Yes (`admin`) |
+| `POST` | `/api/v1/admin/notifications/broadcast` | Broadcast notification to user segments (`user`/`partner`/`all`) | Yes (`admin`) |
+| `GET` | `/api/v1/admin/notifications/stats` | System-wide notification delivery & device token statistics | Yes (`admin`) |
+| `GET` | `/api/v1/admin/notifications/devices` | Query registered fleet device tokens with filters & pagination | Yes (`admin`) |
+
 ---
 
 ## Quick Start
@@ -208,7 +231,7 @@ npm run dev
 # 4. Compile TypeScript
 npm run build
 
-# 5. Run test suites (82/82 passing across all 7 test suites)
+# 5. Run test suites (100/100 passing across all 8 test suites)
 npm test
 ```
 

@@ -382,6 +382,66 @@ The Main Backend is designed to act as the primary operational coordinator while
    - Pushes telemetry events via HTTP POST to the Admin Sub-Backend (`${ADMIN_SUB_BACKEND_URL}/api/v1/internal/devices/stream`).
    - Exposes authenticated high-throughput polling and analytical endpoints (`/api/v1/internal/admin/devices/*`) protected by `x-engine-secret`.
 
+---
+
+## 11. In-App Notifications & Device Push System Architecture
+
+```
++--------------------------------------------------------------------------------------------------+
+|                                    USER APP MOBILE CLIENT                                        |
+|                          (Inbox View, Unread Badging, Push Receiver)                             |
++--------------------------------------------------------------------------------------------------+
+         |                                           ^                                  ^
+         | 1. POST /device-token                     | 4. Fetch Inbox                   | 5. Real-Time Push
+         |    (Register FCM/APNs token)              |    (GET /notifications)          |    (FCM / APNs)
+         v                                           |                                  |
++==================================================================================================+
+|                                   MAIN BACKEND (v1.2.1)                                          |
++==================================================================================================+
+    |                                                |                                  |
+    | [Token Registry]                               | [In-App Notification Engine]     | [Push Dispatcher]
+    v                                                v                                  |
++--------------------+                     +--------------------+                       |
+| Core Database      |                     | Core Database      |                       |
+| DeviceToken Model  |                     | Notification Model |                       |
+| - userId, token    |                     | - userId, title    |                       |
+| - platform, active |                     | - body, type, read |                       |
++--------------------+                     +--------------------+                       |
+                                                     |                                  |
+                                                     +---- Trigger Push Notification ---+
+                                                                                        |
+                                                                                        v
+                                                                       +--------------------------------+
+                                                                       | PushNotificationService        |
+                                                                       | - Token Lookup (isActive: true)|
+                                                                       | - FCM / APNs Dispatch          |
+                                                                       | - Mock/Dev Graceful Fallback   |
+                                                                       +--------------------------------+
+                                                                                        |
+                                                                                        v
+                                                                       +--------------------------------+
+                                                                       | Cloud Messaging Gateways       |
+                                                                       | (Google FCM / Apple APNs)      |
+                                                                       +--------------------------------+
+```
+
+### Architectural Pillars
+1. **Core Database Storage & Indexing**:
+   - `Notification`:
+     - Schema: `userId`, `title`, `body`, `type` (`system`, `account`, `order`, `promo`, `rating`, `alert`), `priority`, `data`, `imageUrl`, `isRead`, `readAt`, `isArchived`, `isPushSent`, `pushStatus`, `pushError`.
+     - Optimized Compound Indexes: `{ userId: 1, isRead: 1, createdAt: -1 }`, `{ userId: 1, isArchived: 1, createdAt: -1 }`, `{ userId: 1, createdAt: -1 }`.
+   - `DeviceToken`:
+     - Schema: `userId`, `token`, `platform` (`android`, `ios`, `web`, `other`), `deviceModel`, `osVersion`, `appVersion`, `isActive`, `lastUsedAt`.
+     - Indexes: `{ token: 1 }` (unique), `{ userId: 1, token: 1 }` (unique compound), `{ userId: 1, isActive: 1 }`, `{ platform: 1, isActive: 1 }`.
+2. **Push Delivery Decoupling**:
+   - The user app receives immediate confirmation when an event occurs.
+   - Device push notifications are dispatched asynchronously to prevent network latency from affecting request/response cycles.
+   - Provider abstraction supports Google FCM, Apple APNs, or local high-performance simulation logging in test and local environments.
+3. **Admin Broadcast & Fan-Out Engine**:
+   - Targeted user alerts (`POST /api/v1/admin/notifications/send`).
+   - Segment-based bulk broadcasting (`POST /api/v1/admin/notifications/broadcast`) with automatic role filtering and batched multicast device push delivery.
+
+
 
 
 

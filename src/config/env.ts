@@ -113,6 +113,10 @@ export const env = {
   STORAGE_REGION:
     process.env.STORAGE_REGION || process.env.CLOUDFLARE_R2_REGION || "",
 
+  // Push Notification (Firebase Cloud Messaging / APNs)
+  FCM_SERVER_KEY: process.env.FCM_SERVER_KEY || "",
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID || "",
+
   // Rate Limiting
   RATE_LIMIT_PER_MINUTE: parseInt(
     process.env.RATE_LIMIT_PER_MINUTE || "300",

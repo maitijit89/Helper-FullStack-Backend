@@ -523,5 +523,77 @@ def record_device_telemetry(user_id, telemetry_data, headers):
     return device_doc
 ```
 
+---
+
+## Algorithm 9: In-App Notification Fan-Out & Device Push Token Hygiene Pipeline
+
+### 9.1 Objective
+Ensure timely, dual-channel notification delivery (persistent in-app document + instant hardware push) while maintaining strict token hygiene, handling multi-device user profiles, and avoiding push leakage across session sign-outs.
+
+### 9.2 Token Hygiene & Multi-Device Resolution Model
+For a user $u \in \mathcal{U}$ with set of registered devices $\mathcal{D}_u$:
+
+$$\mathcal{D}_u^{\text{active}} = \{ d \in \mathcal{D}_u \mid d.\text{isActive} = \text{True} \}$$
+
+1. **Token Reassignment**:
+   If token $t$ is registered by user $u_B$ but previously belonged to $u_A$, the system executes an atomic ownership transfer:
+   $$\text{DeviceToken.findOneAndUpdate}(t, \, \{ \text{userId}: u_B, \, \text{isActive}: \text{True}, \, \text{lastUsedAt}: \text{now} \})$$
+2. **Deactivation on Sign-Out**:
+   When $u$ logs out from device with token $t$:
+   $$\text{DeviceToken.updateOne}(\{ \text{userId}: u, \, \text{token}: t \}, \, \{ \text{isActive}: \text{False} \})$$
+
+### 9.3 Notification Dispatch & Fan-Out Pseudo-Code
+```python
+def dispatch_notification(recipient_user_id, title, body, notif_type="system", priority="normal", data={}, send_push=True):
+    # 1. Create In-App Notification in Core DB
+    notification = CoreDB.Notification.create({
+        "userId": recipient_user_id,
+        "title": title,
+        "body": body,
+        "type": notif_type,
+        "priority": priority,
+        "data": data,
+        "isRead": False,
+        "isArchived": False,
+        "pushStatus": "pending" if send_push else "skipped"
+    })
+    
+    # 2. Asynchronous Push Dispatch
+    if send_push:
+        active_tokens = CoreDB.DeviceToken.find({"userId": recipient_user_id, "isActive": True})
+        
+        if not active_tokens:
+            notification.pushStatus = "skipped"
+            notification.save()
+            return notification
+            
+        push_payload = {
+            "title": title,
+            "body": body,
+            "data": data,
+            "priority": priority
+        }
+        
+        try:
+            receipt = CloudMessagingGateway.send_multicast(
+                tokens=[d.token for d in active_tokens],
+                payload=push_payload
+            )
+            notification.isPushSent = True
+            notification.pushStatus = "sent"
+            CoreDB.DeviceToken.updateMany(
+                {"token": {"$in": [d.token for d in active_tokens]}},
+                {"$set": {"lastUsedAt": now()}}
+            )
+        except Exception as e:
+            notification.pushStatus = "failed"
+            notification.pushError = str(e)
+            
+        notification.save()
+        
+    return notification
+```
+
+
 
 

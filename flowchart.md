@@ -360,6 +360,63 @@ sequenceDiagram
     end
 ```
 
+---
+
+## 12. In-App Notification Lifecycle & Device Push Sequence Flowchart
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant App as User Mobile App (Client)
+    participant API as Main Backend (v1.2.1)
+    participant CoreDB as Core Database
+    participant PushService as PushNotificationService
+    participant Gateways as APNs / FCM Cloud Messaging
+
+    Note over App,API: Step 1: Device Push Token Registration
+    App->>API: POST /api/v1/notifications/device-token<br/>{ token: "fcm_token_xyz...", platform: "android", deviceModel: "S24 Ultra" }
+    API->>CoreDB: Upsert DeviceToken (userId, token, isActive: true, lastUsedAt: now)
+    CoreDB-->>API: Token Registered
+    API-->>App: 201 Created (Device Token Registered)
+
+    Note over App,API: Step 2: In-App Event & Push Dispatch
+    alt Event Trigger (Admin Broadcast, Order Update, System Alert)
+        API->>CoreDB: Insert Notification (userId, title, body, type, isRead: false, pushStatus: "pending")
+        CoreDB-->>API: Notification Created (id)
+        
+        API->>PushService: sendPushNotification({ userId, title, body, data })
+        PushService->>CoreDB: Query active tokens for userId (isActive: true)
+        CoreDB-->>PushService: Return active tokens [token1, token2]
+        
+        alt Active Tokens Exist
+            PushService->>Gateways: Dispatch Push Payload to FCM/APNs
+            Gateways-->>PushService: Push Dispatched (Receipt / messageId)
+            PushService->>CoreDB: Update Notification (isPushSent: true, pushStatus: "sent")
+            PushService->>CoreDB: Update DeviceToken (lastUsedAt: now)
+            Gateways-->>App: Hardware Push Banner Delivered to Device
+        else No Active Tokens
+            PushService->>CoreDB: Update Notification (pushStatus: "skipped")
+        end
+    end
+
+    Note over App,API: Step 3: User Reads & Interacts with Inbox
+    App->>API: GET /api/v1/notifications/unread-count
+    API->>CoreDB: Count { userId, isRead: false, isArchived: false }
+    CoreDB-->>API: unreadCount: 3
+    API-->>App: 200 OK ({ unreadCount: 3 })
+
+    App->>API: GET /api/v1/notifications?limit=20&page=1
+    API->>CoreDB: Fetch paginated notifications
+    CoreDB-->>API: Return notifications list
+    API-->>App: 200 OK (Inbox feed)
+
+    App->>API: PATCH /api/v1/notifications/:id/read
+    API->>CoreDB: Update Notification (isRead: true, readAt: now)
+    CoreDB-->>API: Updated
+    API-->>App: 200 OK (Notification marked read)
+```
+
+
 
 
 
