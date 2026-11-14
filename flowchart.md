@@ -416,6 +416,54 @@ sequenceDiagram
     API-->>App: 200 OK (Notification marked read)
 ```
 
+---
+
+## 13. Order Checkout, Partner Claim & Delivery Flowchart
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User as User App (Customer)
+    participant API as Main Backend (v1.2.1)
+    participant CoreDB as Core DB (Order)
+    participant CatalogDB as Catalog DB (Product stock)
+    participant Partner as Partner Portal (Delivery)
+    participant Push as Notification & Push Service
+
+    Note over User,API: 1. User Cart Checkout
+    User->>API: POST /api/v1/orders/checkout (Bearer JWT)<br/>{ shippingAddress, paymentMethod: "cod" }
+    API->>CatalogDB: Validate stock for all cart items
+    CatalogDB-->>API: Stock Valid
+    API->>CoreDB: Create Order (status: "confirmed", items, totalAmount)
+    CoreDB-->>API: Order Created (ORD-20261114-XXXX)
+    API->>CatalogDB: Decrement product stock ($inc: -quantity)
+    API->>Push: Dispatch Order Confirmed Notification + Push
+    Push-->>User: In-App & Device Push ("Order Confirmed! 🎉")
+    API-->>User: 201 Created (Order Details)
+
+    Note over Partner,API: 2. Partner Order Claim & Pickup
+    Partner->>API: GET /api/v1/partner/orders/available (Bearer Partner JWT)
+    API-->>Partner: 200 OK (List of unassigned confirmed orders)
+    Partner->>API: PATCH /api/v1/partner/orders/:id/accept
+    API->>CoreDB: Update Order (deliveryPartnerId: partnerId, status: "processing")
+    API->>Push: Notify User ("Partner accepted order & is preparing delivery")
+    Push-->>User: In-App & Push Notification
+    API-->>Partner: 200 OK (Order Assigned)
+
+    Note over Partner,API: 3. Out For Delivery & Handover
+    Partner->>API: PATCH /api/v1/partner/orders/:id/status<br/>{ status: "out_for_delivery", currentLocation: { lat, lng } }
+    API->>CoreDB: Update Order (status: "out_for_delivery")
+    API->>Push: Notify User ("Your order is out for delivery! 🚚")
+    Push-->>User: Live In-App & Push Alert
+
+    Partner->>API: PATCH /api/v1/partner/orders/:id/status<br/>{ status: "delivered" }
+    API->>CoreDB: Update Order (status: "delivered", deliveredAt: now, paymentStatus: "completed")
+    API->>Push: Notify User ("Delivered! Please rate your partner! 📦")
+    Push-->>User: In-App Delivery Confirmation & Rating Trigger
+    API-->>Partner: 200 OK (Delivery Complete, Earnings Credited)
+```
+
+
 
 
 

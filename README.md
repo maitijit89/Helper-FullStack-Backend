@@ -28,7 +28,7 @@ Complete formal engineering documentation has been authored in the project root:
 
 | Database Identifier | Logical DB Name | Responsibilities & Collections |
 | :--- | :--- | :--- |
-| **1. Core / Identity DB** | `helping_services_core` | `User` (verified users, roles, academic profile), `PendingRegistration` (isolated pre-verified drafts), `OtpVerification` (TTL auto-expiring login/mobile OTPs), `Notification` (in-app messages, read state, delivery tracking), `DeviceToken` (hardware FCM/APNs push tokens). |
+| **1. Core / Identity DB** | `helping_services_core` | `User` (verified users, roles, academic profile), `PendingRegistration` (isolated pre-verified drafts), `OtpVerification` (TTL auto-expiring login/mobile OTPs), `Notification` (in-app messages, read state, delivery tracking), `DeviceToken` (hardware FCM/APNs push tokens), `Order` (checkout orders, delivery addresses, status tracking). |
 | **2. Product Catalog DB** | `helping_services_catalog` | `Product` (admin-uploaded products, SKUs, inventory, compatible accessory mappings), `Category` (taxonomy & accessory categories). |
 | **3. Analytics & Intelligence DB** | `helping_services_analytics` | `Cart` (active cart items with granular `addedAt` dwell timestamps), `UserInterestProfile` (category affinities, tag weights, sub-backend instructions), `ProductEvent` (telemetry stream). |
 
@@ -213,6 +213,52 @@ All endpoints are mounted under `/api/v1`:
 | `GET` | `/api/v1/admin/notifications/stats` | System-wide notification delivery & device token statistics | Yes (`admin`) |
 | `GET` | `/api/v1/admin/notifications/devices` | Query registered fleet device tokens with filters & pagination | Yes (`admin`) |
 
+### Category Taxonomy (`/api/v1/categories`, `/api/v1/admin/categories`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/categories` | List active product categories with accessory mappings & product counts | No |
+| `GET` | `/api/v1/categories/:slug` | Get single category details by URL slug | No |
+| `POST` | `/api/v1/admin/categories` | Create new category with accessory linkages | Yes (`admin`) |
+| `PATCH` | `/api/v1/admin/categories/:id` | Update category details | Yes (`admin`) |
+| `DELETE` | `/api/v1/admin/categories/:id` | Soft-deactivate category | Yes (`admin`) |
+
+### Storage & Asset Uploads (`/api/v1/uploads`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/uploads/presigned-url` | Generate S3/R2 presigned upload URL for direct client-to-storage uploads | Yes (`Bearer`) |
+
+### Orders & Checkout Lifecycle (`/api/v1/orders`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `POST` | `/api/v1/orders/checkout` | Convert active cart to confirmed order, deduct stock, trigger push alert | Yes (`Bearer`) |
+| `GET` | `/api/v1/orders` | Get user order history with pagination and status filters | Yes (`Bearer`) |
+| `GET` | `/api/v1/orders/:id` | Get order details and full tracking history timeline | Yes (`Bearer`) |
+| `PATCH` | `/api/v1/orders/:id/cancel` | Cancel order before dispatch and restore catalog stock | Yes (`Bearer`) |
+
+### Partner Portal Fulfillment (`/api/v1/partner`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/partner/dashboard` | Partner performance stats (earnings, deliveries, live ratings) | Yes (`partner`) |
+| `GET` | `/api/v1/partner/orders/available` | Browse available unassigned orders ready for campus delivery | Yes (`partner`) |
+| `PATCH` | `/api/v1/partner/orders/:id/accept` | Accept / claim order for delivery dispatch | Yes (`partner`) |
+| `PATCH` | `/api/v1/partner/orders/:id/status` | Update delivery status (`out_for_delivery`, `delivered`) + GPS coords | Yes (`partner`) |
+| `GET` | `/api/v1/partner/orders` | List orders assigned to authenticated partner | Yes (`partner`) |
+| `GET` | `/api/v1/partner/profile` | View partner profile details | Yes (`partner`) |
+
+### Admin Order Management (`/api/v1/admin/orders`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/api/v1/admin/orders` | Global order feed across all users and partners | Yes (`admin`) |
+| `GET` | `/api/v1/admin/orders/stats` | Order volume, GMV, and fulfillment conversion metrics | Yes (`admin`) |
+| `GET` | `/api/v1/admin/orders/:id` | Full admin inspection of order | Yes (`admin`) |
+| `PATCH` | `/api/v1/admin/orders/:id/status` | Force order status update | Yes (`admin`) |
+| `PATCH` | `/api/v1/admin/orders/:id/assign` | Manually assign / reassign partner to order | Yes (`admin`) |
+
 ---
 
 ## Quick Start
@@ -231,7 +277,7 @@ npm run dev
 # 4. Compile TypeScript
 npm run build
 
-# 5. Run test suites (100/100 passing across all 8 test suites)
+# 5. Run test suites (112/112 passing across all 10 test suites)
 npm test
 ```
 

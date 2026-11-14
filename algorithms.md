@@ -594,6 +594,36 @@ def dispatch_notification(recipient_user_id, title, body, notif_type="system", p
     return notification
 ```
 
+---
+
+## Algorithm 10: Order Inventory Allocation & Partner Routing Pipeline
+
+### 10.1 Objective
+Guarantee atomic stock reservations across concurrent checkout sessions, maintain strict transaction isolation between Core and Catalog databases, and calculate dynamic partner dispatch prioritization.
+
+### 10.2 Inventory Reservation Condition
+For each cart item $i \in \text{cart.items}$, the system verifies availability:
+
+$$\text{Product.stock}_i \ge \text{quantity}_i \quad \forall i$$
+
+If all items satisfy the invariant:
+$$\text{Product.stock}_i \leftarrow \text{Product.stock}_i - \text{quantity}_i$$
+$$\text{Product.salesCount}_i \leftarrow \text{Product.salesCount}_i + \text{quantity}_i$$
+
+On cancellation before dispatch:
+$$\text{Product.stock}_i \leftarrow \text{Product.stock}_i + \text{quantity}_i$$
+$$\text{Product.salesCount}_i \leftarrow \text{Product.salesCount}_i - \text{quantity}_i$$
+
+### 10.3 Partner Routing Priority Score
+When partners query available delivery tasks, unassigned orders are prioritized:
+
+$$\mathcal{P}_{\text{dispatch}}(\text{order}) = W_{\text{wait}} \times \Delta t_{\text{placed}} + W_{\text{proximity}} \times \frac{1}{1 + d(\text{partner}, \text{order.address})}$$
+
+Where:
+- $\Delta t_{\text{placed}}$: Elapsed time since confirmation (FIFO ordering guarantees no stale campus orders).
+- $d(\text{partner}, \text{order.address})$: Distance derived from spatial `UserLocation` coordinates.
+
+
 
 
 

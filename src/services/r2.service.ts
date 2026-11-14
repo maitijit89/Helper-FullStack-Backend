@@ -94,6 +94,29 @@ export class CloudflareR2Service {
     return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
 
+  async getPresignedUploadUrl(
+    key: string,
+    contentType: string = 'application/octet-stream',
+    expiresInSeconds: number = 3600
+  ): Promise<{ uploadUrl: string; key: string; publicUrl: string }> {
+    if (!this.client || !this.bucket) {
+      throw new Error('Object Storage client is not configured');
+    }
+
+    const command = new PutObjectCommand({
+      Bucket: this.bucket,
+      Key: key,
+      ContentType: contentType,
+    });
+
+    const uploadUrl = await getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
+    const publicUrl = env.CLOUDFLARE_R2_PUBLIC_URL
+      ? `${env.CLOUDFLARE_R2_PUBLIC_URL.replace(/\/+$/, '')}/${key}`
+      : uploadUrl.split('?')[0];
+
+    return { uploadUrl, key, publicUrl };
+  }
+
   async deleteObject(key: string): Promise<boolean> {
     if (!this.client || !this.bucket) {
       return false;

@@ -14,6 +14,12 @@ import adminDeviceRouter from './admin-device.route';
 import internalAdminDeviceRouter from './internal-admin-device.route';
 import notificationRouter from './notification.route';
 import adminNotificationRouter from './admin-notification.route';
+import categoryRouter from './category.route';
+import adminCategoryRouter from './admin-category.route';
+import uploadRouter from './upload.route';
+import orderRouter from './order.route';
+import adminOrderRouter from './admin-order.route';
+import partnerRouter from './partner.route';
 import { reminderService } from '../services/reminder.service';
 
 const apiRouter = Router();
@@ -63,7 +69,23 @@ apiRouter.use('/notifications', notificationRouter);
 // 15. Admin Notification Targeted Dispatch & Broadcasting Dashboard
 apiRouter.use('/admin/notifications', adminNotificationRouter);
 
-// 16. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
+// 16. Product Taxonomy & Category Management (Public & Admin)
+apiRouter.use('/categories', categoryRouter);
+apiRouter.use('/admin/categories', adminCategoryRouter);
+
+// 17. S3/R2 Object Storage Upload Presigned URLs
+apiRouter.use('/uploads', uploadRouter);
+
+// 18. User Order & Checkout Lifecycle Management
+apiRouter.use('/orders', orderRouter);
+
+// 19. Admin Order Operations & Fleet Dispatch
+apiRouter.use('/admin/orders', adminOrderRouter);
+
+// 20. Dedicated Partner Portal Operations & Fulfillment Engine
+apiRouter.use('/partner', partnerRouter);
+
+// 21. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
 apiRouter.post('/reminders/run', async (_req, res, next) => {
   try {
     const result = await reminderService.processPendingReminders();

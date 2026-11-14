@@ -353,6 +353,70 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - Non-admin attempts return `403 Forbidden`.
 - Broadcast operations fan out to active users matching role criteria, inserting in-app records and executing multicast push dispatches in bounded batches.
 
+---
+
+## 14. Order Checkout, Stock Reservation & Lifecycle Rules
+
+### Rule 14.1: Cart Conversion & Stock Validation
+- Checkout (`POST /api/v1/orders/checkout`) converts all active items in the user's cart into an `Order` record in **Core DB**.
+- The system validates that each item's requested quantity is $\le$ available `stock` in **Catalog DB**. If stock is insufficient, the checkout request is rejected with `400 Bad Request`.
+- Upon successful order confirmation:
+  - Product stock is decremented immediately (`$inc: { stock: -quantity }`).
+  - `salesCount` is incremented (`$inc: { salesCount: quantity }`).
+  - User's cart is automatically emptied.
+  - A purchase event is dispatched to **Analytics DB** (`ProductEvent`).
+
+### Rule 14.2: Order Status State Machine
+- Permitted order statuses:
+  `['pending', 'confirmed', 'processing', 'out_for_delivery', 'delivered', 'cancelled']`.
+- Status transitions:
+  1. `pending` / `confirmed` $\rightarrow$ Order placed by customer.
+  2. `confirmed` $\rightarrow$ `processing`: Claimed by or assigned to a delivery partner.
+  3. `processing` $\rightarrow$ `out_for_delivery`: Partner has picked up package and is en route.
+  4. `out_for_delivery` $\rightarrow$ `delivered`: Customer received goods, payment confirmed.
+  5. `pending` / `confirmed` $\rightarrow$ `cancelled`: Customer or admin cancels order. Orders that have reached `processing`, `out_for_delivery`, or `delivered` cannot be self-cancelled by customers.
+
+### Rule 14.3: Stock Restoration on Cancellation
+- Cancelling an order automatically restores inventory quantities in **Catalog DB** (`$inc: { stock: +quantity, salesCount: -quantity }`).
+- A status tracking record is appended with the cancellation timestamp and reason.
+
+---
+
+## 15. Partner Portal Fulfillment & Dispatch Rules
+
+### Rule 15.1: Partner Role Authentication & Scoping
+- All partner routes under `/api/v1/partner/*` require active user credentials with `role === 'partner'` or `'admin'`.
+- Normal student/user tokens are rejected with `403 Forbidden`.
+
+### Rule 15.2: Order Acceptance & Mutual Exclusivity
+- Partners discover available deliveries via `GET /api/v1/partner/orders/available` (`status: 'confirmed'`, unassigned).
+- When a partner calls `PATCH /api/v1/partner/orders/:id/accept`, the system locks the order to that partner (`deliveryPartnerId`), advances status to `'processing'`, and dispatches an immediate in-app and push notification to the customer.
+
+### Rule 15.3: Real-Time Partner GPS Integration
+- During delivery status updates (`PATCH /api/v1/partner/orders/:id/status`), partners can stream live GPS coordinates.
+- Location coordinates are ingested into the spatial pipeline (`UserLocation` in Analytics DB) and forwarded to the Admin Sub-Backend for live fleet tracking.
+
+---
+
+## 16. Category Taxonomy & Accessory Mapping Hierarchy
+
+### Rule 16.1: Slug Immutability & Hierarchy
+- Categories are indexed by URL-safe lowercase slugs (e.g. `academic-textbooks`).
+- Each category maintains an array of `accessoryCategories: string[]` designating which accessory lines are canonically compatible.
+
+### Rule 16.2: Admin Authorization
+- Modifications to categories (`POST /api/v1/admin/categories`, `PATCH /api/v1/admin/categories/:id`, `DELETE /api/v1/admin/categories/:id`) are restricted to administrators. Public endpoints provide read-only catalog browsing.
+
+---
+
+## 17. Object Storage S3 Presigned URL Security
+
+### Rule 17.1: Pre-Signed Tokenized Ingestion
+- Direct multipart file uploads through the Express app server are discouraged for large assets.
+- Mobile clients and admin consoles request presigned S3/R2 upload URLs via `POST /api/v1/uploads/presigned-url`.
+- URL generation enforces authenticated user identity, validated MIME content-type, folder scoping (`products`, `avatars`, `documents`), and strict 1-hour expiration.
+
+
 
 
 

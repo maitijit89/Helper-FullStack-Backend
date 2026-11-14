@@ -441,6 +441,52 @@ The Main Backend is designed to act as the primary operational coordinator while
    - Targeted user alerts (`POST /api/v1/admin/notifications/send`).
    - Segment-based bulk broadcasting (`POST /api/v1/admin/notifications/broadcast`) with automatic role filtering and batched multicast device push delivery.
 
+---
+
+## 12. Order Lifecycle & Partner Portal Fulfillment Architecture
+
+```
++------------------------------------+             +------------------------------------+
+|          USER APP CLIENT           |             |       PARTNER PORTAL CLIENT        |
+|  - Active Cart Checkout            |             |  - Available Delivery Radar        |
+|  - Real-time Order Tracking        |             |  - Acceptance & Route Fulfillment  |
++------------------------------------+             +------------------------------------+
+                   |                                                  |
+                   | 1. POST /orders/checkout                         | 2. PATCH /partner/orders/:id/accept
+                   v                                                  v
++=======================================================================================+
+|                             HELPING SERVICES MAIN BACKEND                             |
++=======================================================================================+
+                   |                                                  |
+                   v                                                  v
+         +--------------------+                             +--------------------+
+         | Core DB (Order)    |                             | Core DB (Order)    |
+         | - orderNumber      |                             | - deliveryPartnerId|
+         | - items, subtotal  |                             | - status: 'process'|
+         | - status: confirmed|                             | - trackingHistory  |
+         +--------------------+                             +--------------------+
+                   |                                                  |
+       +-----------+-----------+                                      |
+       |                       |                                      |
+       v                       v                                      v
++--------------+       +--------------+                    +--------------------+
+| Catalog DB   |       | Analytics DB |                    | In-App & Push      |
+| Product stock|       | Empty Cart,  |                    | Dispatch Engine    |
+| -quantity    |       | ProductEvent |                    | (Notify Customer)  |
++--------------+       +--------------+                    +--------------------+
+```
+
+### Architectural Mechanics
+1. **Atomic Cart-to-Order Pipeline**:
+   - Converts `Cart` items into an `Order` document within the Core DB.
+   - Atomically decrements catalog inventory and empties user cart.
+   - Pushes dual-channel customer notifications (in-app inbox + device push).
+2. **Partner Portal Fulfillment Loop**:
+   - Verified delivery partners (`role: 'partner'`) browse unassigned orders.
+   - Accepting an order assigns ownership, updates the timeline, and keeps the customer informed in real time.
+   - Out-for-delivery updates support live GPS breadcrumb streaming into the Analytics DB spatial pipeline.
+
+
 
 
 
