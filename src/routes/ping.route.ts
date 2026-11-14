@@ -1,9 +1,69 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import axios from 'axios';
 import { pingService } from '../services/ping.service';
 import { authenticate } from '../middlewares/auth';
 import { livePresencePingSchema } from '../schemas/ping.schema';
 
 const router = Router();
+
+/**
+ * @route   GET /api/v1/ping/ecosystem
+ * @desc    Deep multi-backend cluster interconnection probe:
+ *          Pings all 4 backends (Main: 8000, Telemetry: 8001, Partner: 8002, Admin: 8003)
+ *          and measures inter-service latency and connectivity status.
+ */
+router.get('/ecosystem', async (_req: Request, res: Response) => {
+  const targets = [
+    { name: 'backend2_telemetry', url: process.env.TELEMETRY_SUB_BACKEND_URL || 'http://localhost:8001', port: 8001 },
+    { name: 'backend3_partner', url: process.env.PARTNER_SUB_BACKEND_URL || 'http://localhost:8002', port: 8002 },
+    { name: 'backend4_admin', url: process.env.ADMIN_SUB_BACKEND_URL || 'http://localhost:8003', port: 8003 },
+  ];
+
+  const results: Record<string, any> = {
+    backend1_main: {
+      port: 8000,
+      status: 'ok',
+      uptimeSeconds: Math.floor(process.uptime()),
+      memoryMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
+    },
+  };
+
+  let connectedCount = 1;
+
+  await Promise.all(
+    targets.map(async (target) => {
+      const start = Date.now();
+      try {
+        const probeRes = await axios.get(`${target.url.replace(/\/+$/, '')}/ping`, {
+          timeout: 1500,
+        });
+        const latencyMs = Date.now() - start;
+        connectedCount += 1;
+        results[target.name] = {
+          port: target.port,
+          status: 'connected',
+          latencyMs,
+          pong: probeRes.data?.pong ?? true,
+        };
+      } catch (err: any) {
+        results[target.name] = {
+          port: target.port,
+          status: 'offline',
+          error: err.code === 'ECONNREFUSED' ? 'Service not running on port' : err.message,
+        };
+      }
+    })
+  );
+
+  res.status(200).json({
+    status: 'ok',
+    totalBackends: 4,
+    connectedBackends: connectedCount,
+    interconnectionHealthy: connectedCount > 1,
+    ecosystem: results,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 /**
  * @route   GET /api/v1/ping

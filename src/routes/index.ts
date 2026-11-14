@@ -22,6 +22,8 @@ import adminOrderRouter from './admin-order.route';
 import partnerRouter from './partner.route';
 import pingRouter from './ping.route';
 import adminSecurityRouter from './admin-security.route';
+import internalAlertRouter from './internal-alert.route';
+import appControlRouter from './app-control.route';
 import { reminderService } from '../services/reminder.service';
 
 const apiRouter = Router();
@@ -93,7 +95,13 @@ apiRouter.use('/ping', pingRouter);
 // 22. Admin Security Operations, Threat Intelligence & Posture Telemetry
 apiRouter.use('/admin/security', adminSecurityRouter);
 
-// 23. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
+// 23. Sub-Backend Emergency Alerts & Partner SOS Ingestion Interface
+apiRouter.use('/internal/alerts', internalAlertRouter);
+
+// 24. Public App Control & Emergency Killswitch Status (Mobile App Startup)
+apiRouter.use('/app-control', appControlRouter);
+
+// 25. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
 apiRouter.post('/reminders/run', async (_req, res, next) => {
   try {
     const result = await reminderService.processPendingReminders();

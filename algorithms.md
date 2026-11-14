@@ -651,6 +651,71 @@ $$\mathcal{O}(u) = \begin{cases}
 0 & \text{otherwise}
 \end{cases}$$
 
+---
+
+## Algorithm 12: Multi-Layer AppSec Defense, NoSQL Neutralization & Constant-Time Cryptography
+
+### 12.1 Objective
+Neutralize malicious query operator injections (CWE-943), prevent HTTP Parameter Pollution (HPP) type confusion (CWE-235), eliminate regular expression Denial-of-Service (ReDoS / CWE-1333), and eliminate side-channel timing discrepancy attacks (CWE-208).
+
+### 12.2 Recursive NoSQL Injection Neutralization
+For any incoming JSON or form object $\mathcal{O}$, the transformation function $\mathcal{T}_{\text{clean}}(\mathcal{O})$ is recursively defined as:
+
+$$\mathcal{T}_{\text{clean}}(k, v) = \begin{cases}
+\varnothing & \text{if } k[0] = '\$' \lor '.' \in k \lor k \in \{\text{'__proto__'}, \text{'constructor'}\} \\
+\mathcal{T}_{\text{clean}}(v) & \text{if } v \text{ is an object/array} \\
+v & \text{otherwise}
+\end{cases}$$
+
+Every stripped occurrence increments the intrusion counter and dispatches an alert:
+$$\mathcal{S}_{\text{audit}} \leftarrow \text{recordEvent}(\text{NOSQL\_INJECTION\_BLOCKED}, \, \text{severity} = \text{'high'})$$
+
+### 12.3 Constant-Time Cryptographic Verification
+To prevent side-channel timing attacks on authentication secrets (OTP codes, Sub-Backend shared secrets), comparison avoids early-exit equality operators and computes:
+
+$$\Delta_{\text{time}}(a, b) = \text{crypto.timingSafeEqual}(\text{Buffer.from}(a), \, \text{Buffer.from}(b))$$
+
+When string lengths differ ($\text{len}(a) \ne \text{len}(b)$), constant-time execution is enforced by evaluating $\text{crypto.timingSafeEqual}(\text{buf}_a, \text{buf}_a)$ before returning `false`, eliminating execution-time leakage.
+
+---
+
+## Algorithm 13: Emergency SOS Real-Time Escalation & Multi-Tier Admin Alert Dispatch
+
+### 13.1 Objective
+When a delivery partner triggers an Emergency SOS in Backend 3 (Partner Sub-Backend), the Main Backend guarantees sub-second receipt, persists an immutable emergency audit record, dispatches urgent notifications to all administrative fleet consoles, and raises critical SecOps telemetry.
+
+### 13.2 Mathematical Formulation & Escalation Sequence
+Upon receipt of SOS payload $\mathcal{P}_{\text{sos}} = \langle \text{partnerId}, \text{latitude}, \text{longitude}, \text{orderId}, t_{\text{trigger}} \rangle$:
+
+1. **Cryptographic Handshake**:
+   $$\text{Verify}(\text{header.secret}, \, \text{ADMIN\_SUB\_BACKEND\_SECRET}) = 1$$
+2. **Alert ID Generation**:
+   $$\text{AlertID} = \text{"SOS-"} + \text{now}() + \text{"-"} + \text{CryptoRandomHex}(3)$$
+3. **Admin Fleet Multi-Cast Dispatch**:
+   $$\forall a \in \{u \in \text{CoreDB.User} \mid u.\text{role} = \text{'admin'}\}:$$
+   $$\text{Notification.create}(a.\text{id}, \, \text{priority}=\text{'urgent'}, \, \text{type}=\text{'alert'}, \, \text{data}=\mathcal{P}_{\text{sos}})$$
+4. **Push Notification Broadcast**:
+   Dispatches Firebase Cloud Messaging (FCM) high-priority data payloads waking up locked administrative devices.
+
+---
+
+## Algorithm 14: Sub-Backend Cluster Interconnection & Resilient Gateway Fallback Protocol
+
+### 14.1 Objective
+Ensure continuous inter-service communication across the 4 distributed backends:
+- **Main Backend** (Port 8000: User App, Catalog, Orders, Push Notifications)
+- **Sub-Backend 2** (Port 8001: Real-Time Telemetry Ingestion & Fleet Geospatial)
+- **Sub-Backend 3** (Port 8002: Partner Portal, Shifts, Dual-OTP Handshake, Wallet)
+- **Sub-Backend 4** (Port 8003: Executive Admin Panel, KYC, AppControl Killswitch)
+
+### 14.2 Interconnection Probing Matrix
+The cluster ecosystem probe evaluated at `GET /api/v1/ping/ecosystem`:
+
+$$\mathcal{H}_{\text{cluster}} = \bigwedge_{i \in \{8000, 8001, 8002, 8003\}} \mathcal{P}_i(\text{latency} \le 1500\text{ ms})$$
+
+If any peer sub-backend is offline or restarting, client requests degrade gracefully to local in-memory/Redis caches without cascading failure or thread blockage.
+
+
 
 
 

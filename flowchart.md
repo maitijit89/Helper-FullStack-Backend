@@ -507,6 +507,118 @@ sequenceDiagram
     end
 ```
 
+---
+
+## 14. Multi-Backend Ecosystem Distributed Topology (Ports 8000, 8001, 8002, 8003)
+
+```mermaid
+graph TB
+    subgraph Clients["Frontend Client Ecosystem"]
+        UserApp["📱 User Mobile App (Flutter/React Native)"]
+        PartnerApp["🛵 Partner Delivery App (Flutter)"]
+        AdminWeb["🖥️ Admin Operations Web Panel"]
+    end
+
+    subgraph Cluster["Distributed Backend Microservices Mesh"]
+        B1["Main Backend (Port 8000)<br/>• User App API & Authentication<br/>• Catalog & Personalized Feed<br/>• Cart & Checkout<br/>• In-App & Push Notifications"]
+        B2["Sub-Backend 2: Telemetry (Port 8001)<br/>• Real-Time GPS Breadcrumbs<br/>• Geofencing Engine<br/>• Device OS Health<br/>• Behavior Intelligence"]
+        B3["Sub-Backend 3: Partner Portal (Port 8002)<br/>• Partner KYC Verification<br/>• Order Dispatch & 5:1 Balancer<br/>• Dual-Phase OTP Handshake<br/>• Wallet & Payout Ledger"]
+        B4["Sub-Backend 4: Admin Panel (Port 8003)<br/>• Executive KPI Analytics<br/>• Fleet Live Tracking Map<br/>• AppControl Killswitch<br/>• Dispute Triage"]
+    end
+
+    subgraph DataTier["Multi-Database & Storage Tier"]
+        CoreDB[("Core DB<br/>Users & Auth")]
+        CatalogDB[("Catalog DB<br/>Products & Categories")]
+        AnalyticsDB[("Analytics DB<br/>Locations & Telemetry")]
+        PartnerDB[("Partner Fleet DB<br/>Wallets & Shifts")]
+        AdminDB[("Admin Governance DB<br/>KPIs & KYC")]
+        RedisCache[("Upstash Redis<br/>Presence & Rate Limits")]
+        R2Storage[("Cloudflare R2 / S3<br/>Presigned Media Storage")]
+    end
+
+    UserApp -->|Port 8000| B1
+    PartnerApp -->|Port 8002| B3
+    AdminWeb -->|Port 8003| B4
+
+    B1 -.->|Telemetry Stream (x-engine-secret)| B2
+    B3 -.->|Live Location Pings| B2
+    B3 -.->|Emergency SOS Alert (x-admin-secret)| B1
+    B4 -.->|Live Telemetry Map Feed| B2
+    B1 -.->|AppControl Status Sync| B4
+
+    B1 --> CoreDB
+    B1 --> CatalogDB
+    B1 --> AnalyticsDB
+    B1 --> RedisCache
+    B1 --> R2Storage
+
+    B2 --> AnalyticsDB
+    B3 --> PartnerDB
+    B4 --> AdminDB
+```
+
+---
+
+## 15. Delivery Partner Emergency SOS & Multi-Tier Escalation Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Partner as Delivery Partner in Danger
+    participant B3 as Partner Sub-Backend (Port 8002)
+    participant B1 as Main Backend (Port 8000)
+    participant SecOps as SecOps Audit Engine
+    participant AdminFleet as Admin Fleet Devices
+    actor SecurityOfficer as Campus Security / Admin
+
+    Partner->>B3: Press Emergency SOS Button<br/>POST /api/v1/issues/sos { coords, orderId, reason }
+    B3->>B3: Mark Partner Emergency Status & Log GPS
+
+    critical Inter-Backend Escalation Handshake
+        B3->>B1: POST /api/v1/internal/alerts/sos<br/>Header: x-admin-sub-backend-secret<br/>{ partnerId, coords, phone, reason }
+        B1->>B1: Validate Secret via timingSafeEqualString()
+    end
+
+    par Parallel Alarm Triggering
+        B1->>SecOps: recordEvent(IDOR_ATTEMPT, severity: 'critical')
+        B1->>B1: Persist urgent Notification in Core DB
+        B1->>AdminFleet: Dispatch High-Priority FCM Push Alert
+    end
+
+    B1-->>B3: 200 OK { status: 'escalated', alertId: 'SOS-...' }
+    B3-->>Partner: 200 OK { status: 'help_dispatched', message: 'Emergency alert escalated.' }
+
+    AdminFleet-->>SecurityOfficer: Loud Audio Siren & Geolocation Popup
+    SecurityOfficer->>SecurityOfficer: Dispatch campus emergency personnel to GPS coordinates
+```
+
+---
+
+## 16. Public App Control & Administrative Emergency Killswitch Lifecycle
+
+```mermaid
+flowchart TD
+    A["Admin triggers Killswitch on Admin Web (Port 8003)"] --> B["B4 updates AppControl document in Admin DB"]
+    B --> C["B4 pushes live WebSocket broadcast to active apps"]
+    
+    D["Mobile Client launches / wakes from background"] --> E["Client queries GET /api/v1/app-control?app=user on Port 8000"]
+    E --> F{"Is cached status valid in Main Backend?"}
+    
+    F -->|Yes: Within 5s TTL| G["Return cached AppControl payload (< 1ms)"]
+    F -->|No: Cache expired| H["Query Backend 4: GET http://localhost:8003/api/v1/app-control"]
+    
+    H -->|B4 Responds| I["Update local in-memory cache with B4 state"]
+    H -->|B4 Timeout / Unreachable| J["Graceful Fallback: Return operational defaults (App Active)"]
+    
+    I --> K{"Is is_stopped === true?"}
+    J --> K
+    
+    K -->|No| L["Allow normal user navigation into Catalog & Feed"]
+    K -->|Yes| M["Display full-screen blocking Maintenance Splash Screen"]
+    M --> N["User cannot initiate checkout or orders until Admin resumes app"]
+```
+
+
 
 
 
