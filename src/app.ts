@@ -94,9 +94,21 @@ export function createApp(): Express {
       framework: 'Express.js + TypeScript',
       environment: env.ENVIRONMENT,
       health: `${env.API_V1_STR}/health`,
+      ping: `${env.API_V1_STR}/ping`,
       database: 'MongoDB (Mongoose ODM)',
       cache: 'Upstash Redis',
       storage: 'Cloudflare R2',
+    });
+  });
+
+  // Direct root ping endpoint for load balancers & CDN probes
+  app.get('/ping', (req: Request, res: Response) => {
+    res.status(200).json({
+      status: 'ok',
+      pong: true,
+      timestamp: new Date().toISOString(),
+      uptimeSeconds: Math.floor(process.uptime()),
+      version: env.VERSION,
     });
   });
 

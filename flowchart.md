@@ -463,6 +463,51 @@ sequenceDiagram
     API-->>Partner: 200 OK (Delivery Complete, Earnings Credited)
 ```
 
+---
+
+## 14. Live Ping & Real-Time Presence Sequence Flowchart
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client as Mobile Client (User / Partner App)
+    participant LB as Load Balancer / CDN Probe
+    participant API as Main Backend (v1.2.1)
+    participant Redis as Redis Cache
+    participant DB as MongoDB Clusters
+
+    Note over LB,API: 1. Edge & Load Balancer Live Ping
+    LB->>API: GET /ping
+    API-->>LB: 200 OK { status: "ok", pong: true, uptimeSeconds: 12450 }
+
+    Note over Client,API: 2. Deep Subsystem Latency Diagnostic
+    Client->>API: GET /api/v1/ping/deep
+    par Latency Probing
+        API->>DB: db.admin().ping()
+        DB-->>API: Latency: 2ms
+    and
+        API->>Redis: client.ping()
+        Redis-->>API: Latency: 1ms
+    end
+    API-->>Client: 200 OK { latencyMs: { mongodb: 2, redis: 1, total: 3 } }
+
+    Note over Client,API: 3. Real-Time Client Presence Heartbeat
+    loop Every 30-60 Seconds
+        Client->>API: POST /api/v1/ping/presence (Bearer JWT)<br/>{ appState: "active", batteryLevel: 88 }
+        API->>Redis: SET presence:user:123 { ... } EX 90
+        Redis-->>API: OK
+        API-->>Client: 200 OK { isOnline: true, expiresInSeconds: 90 }
+    end
+
+    Note over Client,API: 4. Server-Sent Events (SSE) Live Heartbeat Stream
+    Client->>API: GET /api/v1/ping/stream
+    API-->>Client: 200 OK (Content-Type: text/event-stream)
+    loop Every 5 Seconds
+        API-->>Client: data: { "pong": true, "timestamp": "...", "uptimeSeconds": ... }
+    end
+```
+
+
 
 
 

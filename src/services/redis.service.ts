@@ -59,6 +59,43 @@ class RedisService {
     return env.REDIS_URL ? "connecting_or_fallback" : "in_memory";
   }
 
+  async ping(): Promise<number> {
+    const start = Date.now();
+    if (this.client && this.client.status === "ready") {
+      try {
+        await this.client.ping();
+        return Date.now() - start;
+      } catch {
+        // fallback to memory
+      }
+    }
+    const testKey = 'ping:probe';
+    this.inMemoryFallback.set(testKey, { value: '1', expiresAt: Date.now() + 5000 });
+    this.inMemoryFallback.get(testKey);
+    return Date.now() - start;
+  }
+
+  async scanKeys(pattern: string): Promise<string[]> {
+    if (this.client && this.client.status === "ready") {
+      try {
+        return await this.client.keys(pattern);
+      } catch {
+        // fallback
+      }
+    }
+    const regex = new RegExp("^" + pattern.replace(/\*/g, ".*") + "$");
+    const matched: string[] = [];
+    const now = Date.now();
+    for (const [key, item] of this.inMemoryFallback.entries()) {
+      if (regex.test(key)) {
+        if (!item.expiresAt || item.expiresAt > now) {
+          matched.push(key);
+        }
+      }
+    }
+    return matched;
+  }
+
   async get(key: string): Promise<string | null> {
     if (this.client && this.client.status === "ready") {
       try {

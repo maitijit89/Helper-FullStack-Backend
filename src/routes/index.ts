@@ -20,6 +20,7 @@ import uploadRouter from './upload.route';
 import orderRouter from './order.route';
 import adminOrderRouter from './admin-order.route';
 import partnerRouter from './partner.route';
+import pingRouter from './ping.route';
 import { reminderService } from '../services/reminder.service';
 
 const apiRouter = Router();
@@ -85,7 +86,10 @@ apiRouter.use('/admin/orders', adminOrderRouter);
 // 20. Dedicated Partner Portal Operations & Fulfillment Engine
 apiRouter.use('/partner', partnerRouter);
 
-// 21. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
+// 21. Real-Time Live Ping, Diagnostic Latency & Presence Heartbeat System
+apiRouter.use('/ping', pingRouter);
+
+// 22. Internal/Worker endpoint to trigger pending registration 3-day reminder checks
 apiRouter.post('/reminders/run', async (_req, res, next) => {
   try {
     const result = await reminderService.processPendingReminders();

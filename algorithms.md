@@ -623,6 +623,35 @@ Where:
 - $\Delta t_{\text{placed}}$: Elapsed time since confirmation (FIFO ordering guarantees no stale campus orders).
 - $d(\text{partner}, \text{order.address})$: Distance derived from spatial `UserLocation` coordinates.
 
+---
+
+## Algorithm 11: Real-Time Presence Heartbeat & Multi-Cluster Latency Measurement Pipeline
+
+### 11.1 Objective
+Measure active multi-database network round-trip times and compute continuous user/partner online presence states with automatic expiration and zero database locking.
+
+### 11.2 Subsystem Latency Invariant
+For a diagnostic probe initiated at $t_0$:
+
+$$\tau_{\text{mongo}} = t_{\text{mongo\_pong}} - t_{\text{mongo\_ping}}$$
+$$\tau_{\text{redis}} = t_{\text{redis\_pong}} - t_{\text{redis\_ping}}$$
+$$\tau_{\text{total}} = \max(\tau_{\text{mongo}}, \, \tau_{\text{redis}}) + \epsilon_{\text{overhead}}$$
+
+If any critical subsystem fails to reply within threshold $\tau_{\text{max}} = 5000\text{ ms}$, status transitions from `'ok'` to `'degraded'`.
+
+### 11.3 Presence TTL Sliding Window
+For an authenticated presence ping received at $t_{\text{ping}}$ from user $u$ with role $r$:
+
+$$\text{Redis.SET}(\text{"presence:"} + r + \text{":"} + u, \, \text{payload}, \, \text{EX}=90)$$
+
+Online status predicate $\mathcal{O}(u)$ at any query time $t_q$:
+
+$$\mathcal{O}(u) = \begin{cases}
+1 & \text{if } t_q - t_{\text{ping}} < 90\text{ seconds} \\
+0 & \text{otherwise}
+\end{cases}$$
+
+
 
 
 

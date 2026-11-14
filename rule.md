@@ -416,6 +416,32 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - Mobile clients and admin consoles request presigned S3/R2 upload URLs via `POST /api/v1/uploads/presigned-url`.
 - URL generation enforces authenticated user identity, validated MIME content-type, folder scoping (`products`, `avatars`, `documents`), and strict 1-hour expiration.
 
+---
+
+## 18. Real-Time Live Ping, Diagnostic Latency & Presence Rules
+
+### Rule 18.1: L4/L7 High-Frequency Ping Probes
+- `GET /ping` (root) and `GET /api/v1/ping` provide instantaneous non-blocking responses ($< 2$ ms) containing `pong: true`, process uptime, timestamp, and memory telemetry.
+- Designed specifically for ingress load balancers, Cloudflare health checks, and Kubernetes readiness/liveness probes.
+
+### Rule 18.2: Multi-Cluster Deep Latency Diagnostic Ping
+- `GET /api/v1/ping/deep` (alias `GET /api/v1/ping/live`) performs parallel round-trip ping verification to:
+  1. MongoDB Atlas database clusters (`admin.ping()`).
+  2. Upstash Redis distributed cache (`client.ping()`).
+  3. Cloudflare R2 / Supabase S3 Object Storage bucket availability.
+- Surfaces exact millisecond latency per subsystem (`latencyMs.mongodb`, `latencyMs.redis`, `latencyMs.total`) and returns `503 Service Unavailable` if core storage tiers are disconnected.
+
+### Rule 18.3: Client Live Presence Heartbeat Lifecycle
+- Client mobile apps (User App and Partner Portal) submit periodic presence pings via `POST /api/v1/ping/presence` with `{ appState: 'active', batteryLevel, networkType }`.
+- Active presence is cached in Redis with an automatic **90-second TTL** (`presence:${role}:${userId}`).
+- If a client closes the app or loses network connection, presence records expire naturally without requiring explicit logout requests.
+- `GET /api/v1/ping/presence/:userId` checks real-time online status, and `GET /api/v1/ping/presence` surfaces fleet active user and partner counts.
+
+### Rule 18.4: Server-Sent Events (SSE) Live Stream
+- `GET /api/v1/ping/stream` establishes a persistent HTTP text/event-stream connection emitting real-time heartbeat frames every 5 seconds.
+- Passing `?once=true` closes the stream immediately after the initial frame for test verification and handshake probes.
+
+
 
 
 

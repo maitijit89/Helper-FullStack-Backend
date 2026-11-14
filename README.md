@@ -259,6 +259,19 @@ All endpoints are mounted under `/api/v1`:
 | `PATCH` | `/api/v1/admin/orders/:id/status` | Force order status update | Yes (`admin`) |
 | `PATCH` | `/api/v1/admin/orders/:id/assign` | Manually assign / reassign partner to order | Yes (`admin`) |
 
+### Live Ping & Real-Time Presence (`/ping`, `/api/v1/ping`)
+
+| Method | Endpoint | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `GET` | `/ping` | Fast root L4/L7 live ping & heartbeat for load balancers (`pong: true`) | No |
+| `GET` | `/api/v1/ping` | Fast L7 ping with memory metrics (RSS, Heap), uptime, and version | No |
+| `GET` | `/api/v1/ping/deep` | Deep diagnostic ping measuring MongoDB, Redis, and storage round-trip latency | No |
+| `GET` | `/api/v1/ping/live` | Alias for deep diagnostic ping | No |
+| `POST` | `/api/v1/ping/presence` | Submit active presence heartbeat from mobile app (90-sec TTL) | Yes (`Bearer`) |
+| `GET` | `/api/v1/ping/presence` | Get aggregate counts of currently active online users and partners | No |
+| `GET` | `/api/v1/ping/presence/:userId` | Check if a specific user or partner is currently online | No |
+| `GET` | `/api/v1/ping/stream` | Server-Sent Events (SSE) live heartbeat stream (emits ping every 5s) | No |
+
 ---
 
 ## Quick Start
@@ -277,7 +290,7 @@ npm run dev
 # 4. Compile TypeScript
 npm run build
 
-# 5. Run test suites (112/112 passing across all 10 test suites)
+# 5. Run test suites (121/121 passing across all 11 test suites)
 npm test
 ```
 

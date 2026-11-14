@@ -486,6 +486,41 @@ The Main Backend is designed to act as the primary operational coordinator while
    - Accepting an order assigns ownership, updates the timeline, and keeps the customer informed in real time.
    - Out-for-delivery updates support live GPS breadcrumb streaming into the Analytics DB spatial pipeline.
 
+---
+
+## 13. Live Ping Probes, Multi-Cluster Latency & Presence System Architecture
+
+```
+                                  +------------------------------------+
+                                  |         CLIENTS & MONITORS         |
+                                  | (Load Balancer, User App, Partner) |
+                                  +------------------------------------+
+                                       |              |             |
+                        1. GET /ping   |  2. GET      | 3. POST     | 4. GET
+                        (Fast Probe)   |  /ping/deep  | /presence   | /ping/stream
+                                       v              |             | (SSE Live Stream)
++=======================================================================================+
+|                             HELPING SERVICES MAIN BACKEND                             |
++=======================================================================================+
+         |                                  |                        |
+         | (Sub-2ms Pong)                   | (Parallel Probe)       | (Redis 90s TTL)
+         v                                  v                        v
++--------------------+            +--------------------+   +--------------------+
+| L4/L7 Fast Ping    |            | Multi-Cluster Ping |   | Presence Cache     |
+| - uptimeSeconds    |            | - Core DB (ms)     |   | - presence:user    |
+| - memory (RSS/Heap)|            | - Catalog DB (ms)  |   | - presence:partner |
+| - version: 1.2.1   |            | - Analytics DB (ms)|   | - Active Headcount |
++--------------------+            | - Upstash Redis(ms)|   +--------------------+
+                                  | - Supabase S3 State|
+                                  +--------------------+
+```
+
+### Architectural Highlights
+1. **Zero-Overhead Edge Probing**: Root `/ping` bypasses database lookups to deliver sub-2ms response times for high-frequency cloud health probes.
+2. **Deep Cluster Latency Telemetry**: `/api/v1/ping/deep` actively measures live network round-trip time across MongoDB, Redis, and Supabase S3 storage.
+3. **Transient Presence Cache**: Manages user and delivery partner active sessions using key TTL eviction (90 seconds), avoiding expensive persistent database writes for high-frequency heartbeats.
+
+
 
 
 
