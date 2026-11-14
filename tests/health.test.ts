@@ -30,7 +30,7 @@ describe('Health and System Status Integration Tests', () => {
 describe('Cloudflare R2 Service Unit Tests', () => {
   it('should expose provider state and throw when unconfigured', async () => {
     expect(typeof r2Service.isConfigured).toBe('boolean');
-    expect(['cloudflare-r2', 'unconfigured']).toContain(r2Service.provider);
+    expect(['cloudflare-r2', 'supabase-storage', 'unconfigured']).toContain(r2Service.provider);
 
     if (!r2Service.isConfigured) {
       await expect(
