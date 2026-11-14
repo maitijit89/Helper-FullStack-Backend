@@ -12,6 +12,7 @@ import {
   CompleteProfileInput,
   UpdateProfileInput,
 } from '../schemas/user.schema';
+import { timingSafeEqualString } from '../utils/security.utils';
 
 export class UserService {
   public generateOtp(): string {
@@ -156,7 +157,7 @@ export class UserService {
       throw new BadRequestException('Maximum verification attempts exceeded. Please request a new OTP.');
     }
 
-    if (record.otp !== otp.trim()) {
+    if (!timingSafeEqualString(record.otp, otp.trim())) {
       record.attempts += 1;
       await record.save();
       throw new BadRequestException('Invalid OTP code.');

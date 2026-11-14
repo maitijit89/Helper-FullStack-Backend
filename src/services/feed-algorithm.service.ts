@@ -39,7 +39,7 @@ export class FeedAlgorithmService {
     const limit = Math.min(100, Math.max(1, query.limit || 20));
 
     const filter: Record<string, any> = { isDeleted: false, isActive: true };
-    if (query.category) {
+    if (typeof query.category === 'string' && query.category.trim()) {
       filter.category = new RegExp(`^${escapeRegex(query.category.trim())}$`, 'i');
     }
 

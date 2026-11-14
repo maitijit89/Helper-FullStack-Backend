@@ -80,10 +80,10 @@ export class SearchAlgorithmService {
     // 1. Fetch Candidate Products from Catalog DB with primary filters
     const filter: Record<string, any> = { isDeleted: false, isActive: true };
 
-    if (options.category) {
+    if (typeof options.category === 'string' && options.category.trim()) {
       filter.category = new RegExp(`^${escapeRegex(options.category.trim())}$`, 'i');
     }
-    if (options.brand) {
+    if (typeof options.brand === 'string' && options.brand.trim()) {
       filter.brand = new RegExp(`^${escapeRegex(options.brand.trim())}$`, 'i');
     }
     if (options.minPrice !== undefined || options.maxPrice !== undefined) {

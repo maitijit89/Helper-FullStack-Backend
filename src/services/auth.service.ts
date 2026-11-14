@@ -16,6 +16,7 @@ import {
   VerifyRegistrationOtpInput,
   LoginVerifyOtpInput,
 } from '../schemas/auth.schema';
+import { timingSafeEqualString } from '../utils/security.utils';
 
 export class AuthService {
   /**
@@ -109,7 +110,7 @@ export class AuthService {
       );
     }
 
-    if (pending.otp !== input.otp.trim()) {
+    if (!timingSafeEqualString(pending.otp, input.otp.trim())) {
       pending.otpAttempts += 1;
       await pending.save();
       throw new BadRequestException('Invalid OTP code. Please enter the correct code.');
@@ -232,7 +233,7 @@ export class AuthService {
       throw new BadRequestException('Maximum attempts exceeded. Please request a new login OTP.');
     }
 
-    if (record.otp !== input.otp.trim()) {
+    if (!timingSafeEqualString(record.otp, input.otp.trim())) {
       record.attempts += 1;
       await record.save();
       throw new BadRequestException('Invalid login OTP.');

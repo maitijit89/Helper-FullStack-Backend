@@ -9,6 +9,11 @@ import { logger } from './config/logger';
 import { errorHandler } from './middlewares/errorHandler';
 import { standardRateLimiter } from './middlewares/rateLimiter';
 import { versionMiddleware } from './middlewares/version.middleware';
+import {
+  sanitizeNoSqlInjection,
+  preventParameterPollution,
+  enforcePayloadDepth,
+} from './middlewares/security.middleware';
 import apiRouter from './routes';
 
 export function createApp(): Express {
@@ -28,6 +33,23 @@ export function createApp(): Express {
   app.use(
     helmet({
       crossOriginResourcePolicy: false,
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'none'"],
+        },
+      },
+      frameguard: { action: 'deny' },
+      hidePoweredBy: true,
+      hsts: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
+      referrerPolicy: { policy: 'no-referrer' },
+      noSniff: true,
+      dnsPrefetchControl: { allow: false },
     })
   );
 
@@ -79,9 +101,14 @@ export function createApp(): Express {
     app.use(morgan('combined'));
   }
 
-  // Body Parsing
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  // Body Parsing (Strict 2MB limit for DoS mitigation)
+  app.use(express.json({ limit: '2mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '2mb' }));
+
+  // AppSec Defensive Hardening Middlewares
+  app.use(enforcePayloadDepth(10));
+  app.use(sanitizeNoSqlInjection);
+  app.use(preventParameterPollution);
 
   // Standard Rate Limiter
   app.use(standardRateLimiter);

@@ -36,7 +36,10 @@ const STOP_WORDS = new Set([
  * Escapes special regular expression metacharacters to safely use user input in RegExp queries
  * Preventing ReDoS and unhandled SyntaxError attacks
  */
-export function escapeRegex(text: string): string {
+export function escapeRegex(text: any): string {
+  if (typeof text !== 'string') {
+    return '';
+  }
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 

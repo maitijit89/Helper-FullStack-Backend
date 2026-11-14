@@ -463,6 +463,27 @@ The backend maintains 3 logical databases within the MongoDB cluster:
 - Profile updates via `PATCH /api/v1/users/me` enforce strict field whitelisting and actively reject attempts to alter registered `email` or mutate authorization `role`/`isAdmin` flags.
 - All single-resource lookups, updates, and cancellations (`Order`, `Notification`, `Cart`) enforce explicit ownership checks matching authenticated `req.user.id`, returning `403 Forbidden` or `404 Not Found` for unauthorized tenant access.
 
+### Rule 19.6: NoSQL Injection & MongoDB Operator Neutralization (CWE-943)
+- The centralized `sanitizeNoSqlInjection` middleware recursively scans `req.body`, `req.query`, and `req.params`.
+- Any keys prefixed with `$` (MongoDB query operators like `$gt`, `$ne`, `$where`) or containing prototype pollution sequences (`.`, `__proto__`, `constructor`) are automatically stripped.
+- Security incidents are dispatched to `securityAuditService` with high severity alerts.
+
+### Rule 19.7: HTTP Parameter Pollution (HPP) Defense (CWE-235)
+- Incoming query parameters intended to be single primitives (e.g. `search`, `category`, `brand`, `q`, `page`, `limit`) are normalized by `preventParameterPollution`.
+- If an attacker injects duplicate query keys creating an array, the middleware takes the canonical value and logs a telemetry incident, preventing runtime `parameter.trim is not a function` crashes.
+
+### Rule 19.8: DoS & Recursive JSON Payload Depth Limits (CWE-400)
+- The backend enforces a strict **2MB** body parsing cap for JSON endpoints (with media uploaded through S3/R2 presigned URLs).
+- The `enforcePayloadDepth(10)` middleware rejects recursive JSON payloads exceeding 10 nesting levels with `400 Bad Request`, mitigating parser stack-exhaustion Denial-of-Service.
+
+### Rule 19.9: SecOps Security Audit Logging & Threat Telemetry (CWE-778)
+- Real-time intrusion detection is monitored through `securityAuditService` with automatic PII and credential redaction.
+- Administrators inspect security health via:
+  - `GET /api/v1/admin/security/stats`: Aggregated incident counts by severity and event type.
+  - `GET /api/v1/admin/security/events`: Recent audit trail with source IP and threat metadata.
+  - `GET /api/v1/admin/security/posture`: Verification of active defensive shields (Helmet, CSP, HSTS, NoSQL defense, rate limits).
+
+
 
 
 

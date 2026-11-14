@@ -103,7 +103,7 @@ export class ProductService {
   }): Promise<{ products: IProduct[]; total: number; page: number; totalPages: number }> {
     const filter: Record<string, any> = { isDeleted: false, isActive: true };
 
-    if (query.category) {
+    if (typeof query.category === 'string' && query.category.trim()) {
       filter.category = new RegExp(`^${escapeRegex(query.category.trim())}$`, 'i');
     }
 
@@ -117,7 +117,7 @@ export class ProductService {
       if (query.maxPrice !== undefined) filter.price.$lte = query.maxPrice;
     }
 
-    if (query.search) {
+    if (typeof query.search === 'string' && query.search.trim()) {
       const searchRegex = new RegExp(escapeRegex(query.search.trim()), 'i');
       filter.$or = [
         { title: searchRegex },
